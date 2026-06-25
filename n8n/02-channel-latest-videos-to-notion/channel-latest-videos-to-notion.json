@@ -1,0 +1,173 @@
+{
+  "id": "TApiWf02Notion01",
+  "name": "Channel → Latest Videos → Transcripts → AI Summaries → Notion (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "days", "triggerAtHour": 8 }]
+        }
+      },
+      "id": "22222222-2222-4222-8222-222222222201",
+      "name": "Every Day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-220, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=REPLACE_WITH_YOUTUBE_CHANNEL_ID",
+        "options": {}
+      },
+      "id": "22222222-2222-4222-8222-222222222202",
+      "name": "Get Channel Feed (RSS)",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": { "maxItems": 3 },
+      "id": "22222222-2222-4222-8222-222222222203",
+      "name": "Keep Latest 3",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "video_url", "value": "={{ $json.link }}" },
+            { "name": "format", "value": "json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "22222222-2222-4222-8222-222222222204",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Runs once per video. Joins transcript segments and carries the\n// video title + URL forward from the RSS item (paired by n8n).\nconst d = $json;\nconst transcriptText = (d.transcript || []).map((s) => s.text).join(' ');\nconst rss = $('Get Channel Feed (RSS)').item.json;\nreturn {\n  json: {\n    title: rss.title,\n    videoUrl: rss.link,\n    language: d.language || null,\n    transcriptText,\n    hasTranscript: transcriptText.length > 0,\n  },\n};"
+      },
+      "id": "22222222-2222-4222-8222-222222222205",
+      "name": "Prepare Summary Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "c1111111-1111-4111-8111-1111111111cc",
+              "leftValue": "={{ $json.hasTranscript }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "22222222-2222-4222-8222-222222222206",
+      "name": "Has Transcript?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [ { role: 'system', content: 'You summarize YouTube transcripts into 5 concise, useful bullet points.' }, { role: 'user', content: 'Title: ' + $json.title + '\\n\\nSummarize this transcript:\\n\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "22222222-2222-4222-8222-222222222207",
+      "name": "Summarize (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Notion-Version", "value": "2022-06-28" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ parent: { database_id: 'REPLACE_WITH_YOUR_NOTION_DATABASE_ID' }, properties: { Name: { title: [ { text: { content: $('Prepare Summary Input').item.json.title } } ] }, URL: { url: $('Prepare Summary Input').item.json.videoUrl }, Summary: { rich_text: [ { text: { content: $json.choices[0].message.content.slice(0, 1900) } } ] } } }) }}",
+        "options": {}
+      },
+      "id": "22222222-2222-4222-8222-222222222208",
+      "name": "Save to Notion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_NOTION_CRED_ID",
+          "name": "Notion - Authorization Bearer"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Day": {
+      "main": [[{ "node": "Get Channel Feed (RSS)", "type": "main", "index": 0 }]]
+    },
+    "Get Channel Feed (RSS)": {
+      "main": [[{ "node": "Keep Latest 3", "type": "main", "index": 0 }]]
+    },
+    "Keep Latest 3": {
+      "main": [[{ "node": "Get Transcript (TranscriptAPI)", "type": "main", "index": 0 }]]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [[{ "node": "Prepare Summary Input", "type": "main", "index": 0 }]]
+    },
+    "Prepare Summary Input": {
+      "main": [[{ "node": "Has Transcript?", "type": "main", "index": 0 }]]
+    },
+    "Has Transcript?": {
+      "main": [[{ "node": "Summarize (LLM)", "type": "main", "index": 0 }]]
+    },
+    "Summarize (LLM)": {
+      "main": [[{ "node": "Save to Notion", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

@@ -1,0 +1,133 @@
+{
+  "id": "TApiWf01Single01",
+  "name": "Single Video → Transcript → AI Summary (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "11111111-1111-4111-8111-111111111101",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-160, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1111111-1111-4111-8111-1111111111aa",
+              "name": "videoUrl",
+              "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111102",
+      "name": "Set Video URL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [60, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "video_url", "value": "={{ $json.videoUrl }}" },
+            { "name": "format", "value": "json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111103",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [280, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Join the TranscriptAPI segments into one plain-text transcript.\n// Input: { video_id, language, transcript: [{ text, start, duration }] }\nconst data = $input.first().json;\nconst transcriptText = (data.transcript || []).map((s) => s.text).join(' ');\nreturn [\n  {\n    json: {\n      videoId: data.video_id,\n      language: data.language,\n      transcriptText,\n    },\n  },\n];"
+      },
+      "id": "11111111-1111-4111-8111-111111111104",
+      "name": "Build Transcript Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [ { role: 'system', content: 'You summarize YouTube transcripts into 5 concise, useful bullet points.' }, { role: 'user', content: 'Summarize this transcript:\\n\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111105",
+      "name": "Summarize (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a2222222-2222-4222-8222-2222222222bb",
+              "name": "summary",
+              "value": "={{ $json.choices[0].message.content }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111106",
+      "name": "Extract Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [940, 0]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [[{ "node": "Set Video URL", "type": "main", "index": 0 }]]
+    },
+    "Set Video URL": {
+      "main": [[{ "node": "Get Transcript (TranscriptAPI)", "type": "main", "index": 0 }]]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [[{ "node": "Build Transcript Text", "type": "main", "index": 0 }]]
+    },
+    "Build Transcript Text": {
+      "main": [[{ "node": "Summarize (LLM)", "type": "main", "index": 0 }]]
+    },
+    "Summarize (LLM)": {
+      "main": [[{ "node": "Extract Summary", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}
