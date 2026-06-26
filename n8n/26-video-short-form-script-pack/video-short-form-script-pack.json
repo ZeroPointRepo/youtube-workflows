@@ -1,0 +1,193 @@
+{
+  "id": "TApiWf26ShortForm01",
+  "name": "Video → Short-Form Script Pack (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "26262626-2626-4626-8626-262626262601",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "26262626-2626-4626-8626-2626262626a1",
+              "name": "videoUrl",
+              "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "26262626-2626-4626-8626-262626262602",
+      "name": "Set Video URL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        60,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "26262626-2626-4626-8626-262626262603",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst transcriptText = (data.transcript || []).map((s) => s.text).join(' ');\nconst meta = data.metadata || {};\nreturn [ { json: { title: meta.title || null, videoUrl: 'https://www.youtube.com/watch?v=' + data.video_id, transcriptText } } ];"
+      },
+      "id": "26262626-2626-4626-8626-262626262604",
+      "name": "Build Transcript Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a short-form video producer. From this long-form transcript, create 3-5 short-form scripts (Reels/Shorts/TikTok). Respond ONLY with a JSON object with key scripts: an array of objects, each with title (string), hook (a 1-line scroll-stopper), beats (array of 3-5 short beat strings), caption (string), cta (string), hashtags (array of 3-5 strings, no # symbol). Base everything on the transcript.' }, { role: 'user', content: 'Video title: ' + ($json.title || 'Untitled') + '\\n\\nTranscript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "26262626-2626-4626-8626-262626262605",
+      "name": "Generate Script Pack (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fan out into one row per short-form script — content-calendar-ready.\nconst raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = {}; }\nconst src = $('Build Transcript Text').first().json;\nreturn (r.scripts || []).map((s, i) => ({\n  json: {\n    scriptNumber: i + 1,\n    scriptTitle: s.title || ('Short ' + (i + 1)),\n    hook: s.hook || '',\n    beats: s.beats || [],\n    caption: s.caption || '',\n    cta: s.cta || '',\n    hashtags: s.hashtags || [],\n    sourceTitle: src.title,\n    sourceVideoUrl: src.videoUrl,\n  },\n}));"
+      },
+      "id": "26262626-2626-4626-8626-262626262606",
+      "name": "Format Scripts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Video URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Video URL": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Transcript Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Transcript Text": {
+      "main": [
+        [
+          {
+            "node": "Generate Script Pack (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Script Pack (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Scripts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

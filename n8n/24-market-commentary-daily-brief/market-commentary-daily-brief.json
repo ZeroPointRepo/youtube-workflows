@@ -1,0 +1,296 @@
+{
+  "id": "TApiWf24Market01",
+  "name": "Market Commentary Daily Brief (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "id": "24242424-2424-4424-8424-242424242401",
+      "name": "Every Day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Finance / macro channels to monitor (edit this list — @handle, URL, or UC... ID).\nconst channels = ['REPLACE_WITH_FINANCE_CHANNEL_1', 'REPLACE_WITH_FINANCE_CHANNEL_2', 'REPLACE_WITH_FINANCE_CHANNEL_3'];\nreturn channels.map((c) => ({ json: { channel: c } }));"
+      },
+      "id": "24242424-2424-4424-8424-242424242402",
+      "name": "Set Channels",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/latest",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "24242424-2424-4424-8424-242424242403",
+      "name": "Get Latest Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        120,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keep videos published in the last day (daily brief window).\nconst WINDOW_DAYS = 1;\nconst cutoff = Date.now() - WINDOW_DAYS * 864e5;\nconst out = [];\nfor (const item of $input.all()) {\n  const d = item.json;\n  const ch = (d.channel && d.channel.title) || null;\n  for (const v of (d.results || [])) {\n    const pub = v.published ? new Date(v.published).getTime() : 0;\n    if (pub >= cutoff) out.push({ json: { videoId: v.videoId, title: v.title || null, videoUrl: v.link || ('https://www.youtube.com/watch?v=' + v.videoId), channelTitle: ch } });\n  }\n}\nreturn out;"
+      },
+      "id": "24242424-2424-4424-8424-242424242404",
+      "name": "Collect New Videos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 8
+      },
+      "id": "24242424-2424-4424-8424-242424242405",
+      "name": "Keep Top 8",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "24242424-2424-4424-8424-242424242406",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const MAX = 6000;\nconst sources = []; const blocks = [];\nfor (const item of $input.all()) {\n  const d = item.json;\n  const seg = Array.isArray(d.transcript) ? d.transcript : [];\n  if (seg.length === 0) continue;\n  const meta = d.metadata || {};\n  const vid = d.video_id;\n  const title = meta.title || vid;\n  const text = seg.map((s) => s.text).join(' ').slice(0, MAX);\n  sources.push({ title, videoUrl: 'https://www.youtube.com/watch?v=' + vid });\n  blocks.push('### ' + title + ' (' + (meta.author_name || '') + ')\\n' + text);\n}\nreturn [ { json: { sourceCount: sources.length, sources, combinedText: blocks.join('\\n\\n') } } ];"
+      },
+      "id": "24242424-2424-4424-8424-242424242407",
+      "name": "Aggregate Brief Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [ { role: 'system', content: 'You are a markets analyst. From the supplied transcripts of recent finance/macro videos, write a concise daily market brief in Markdown with sections: ## Market Themes, ## Tickers & Assets Mentioned, ## Macro Events, ## Risks. End with the exact line: \"_Not financial advice. For informational purposes only._\". Use only what is in the transcripts; do not invent prices or figures.' }, { role: 'user', content: 'Recent finance videos:\\n\\n' + $json.combinedText } ] }) }}",
+        "options": {}
+      },
+      "id": "24242424-2424-4424-8424-242424242408",
+      "name": "Write Market Brief (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: 'REPLACE_WITH_SLACK_CHANNEL_ID', text: '*📈 Daily Market Brief* (' + ($('Aggregate Brief Input').first().json.sourceCount || 0) + ' videos)\\n\\n' + $json.choices[0].message.content }) }}",
+        "options": {}
+      },
+      "id": "24242424-2424-4424-8424-242424242409",
+      "name": "Send Brief",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_SLACK_CRED_ID",
+          "name": "Slack - Authorization Bearer"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Day": {
+      "main": [
+        [
+          {
+            "node": "Set Channels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Channels": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Collect New Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect New Videos": {
+      "main": [
+        [
+          {
+            "node": "Keep Top 8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Top 8": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Brief Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Brief Input": {
+      "main": [
+        [
+          {
+            "node": "Write Market Brief (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Market Brief (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Send Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

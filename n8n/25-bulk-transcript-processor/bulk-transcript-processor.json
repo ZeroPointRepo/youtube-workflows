@@ -1,0 +1,129 @@
+{
+  "id": "TApiWf25Bulk01",
+  "name": "Bulk Transcript Processor (rate-limit handling) (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "25252525-2525-4525-8525-252525252501",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Paste your video URLs or IDs here — one per array entry.\nconst videoUrls = ['REPLACE_WITH_VIDEO_URL_OR_ID_1', 'REPLACE_WITH_VIDEO_URL_OR_ID_2'];\nreturn videoUrls.map((u) => ({ json: { videoUrl: u } }));"
+      },
+      "id": "25252525-2525-4525-8525-252525252502",
+      "name": "Set Video List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 5,
+              "batchInterval": 1000
+            }
+          }
+        }
+      },
+      "id": "25252525-2525-4525-8525-252525252503",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        340,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Classify each result as success/failed (credit-safe: failed/4xx/5xx/429 cost 0 credits).\nconst out = [];\nfor (const item of $input.all()) {\n  const d = item.json || {};\n  if (Array.isArray(d.transcript) && d.transcript.length > 0) {\n    out.push({ json: { videoId: d.video_id || null, status: 'success', segmentCount: d.transcript.length, language: d.language || null, errorType: null, httpCode: null } });\n  } else {\n    const err = d.error || {};\n    const code = err.httpCode || err.code || d.statusCode || null;\n    let type = 'unknown';\n    if (code == 404) type = 'no_captions';\n    else if (code == 422) type = 'invalid_id';\n    else if (code == 429) type = 'rate_limited_or_no_credits';\n    else if (code && String(code).charAt(0) === '5') type = 'server_error';\n    out.push({ json: { videoId: d.video_id || null, status: 'failed', errorType: type, httpCode: code, message: err.message || 'no transcript returned' } });\n  }\n}\nreturn out;"
+      },
+      "id": "25252525-2525-4525-8525-252525252504",
+      "name": "Classify Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Video List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Video List": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Classify Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

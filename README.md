@@ -36,6 +36,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 20 | [Playlist → Full Text Corpus (CSV/JSON)](n8n/20-playlist-full-text-corpus) | n8n | Turn a playlist into a structured corpus: one row per video with metadata + full transcript text. For research/datasets. |
 | 21 | [Playlist → Quiz / Flashcard Generator](n8n/21-playlist-quiz-flashcards) | n8n | Transcribe lectures and generate Anki-style flashcards + quiz questions, one row per card. For edtech/students. |
 | 22 | [Earnings-Call Tracker → Analyst Summary → Slack](n8n/22-earnings-call-tracker) | n8n | Watch an IR channel; on a new earnings call, transcribe it and post an analyst summary to Slack. For investors/analysts. |
+| 23 | [Playlist → Study Notes Generator](n8n/23-playlist-study-notes) | n8n | Turn a lecture playlist into structured study notes per video (summary, key concepts, definitions, timestamps). For edtech/students. |
+| 24 | [Market Commentary Daily Brief](n8n/24-market-commentary-daily-brief) | n8n | Monitor finance/macro channels and post a daily market brief (themes, tickers, macro, risks) to Slack. For finance/analysts. |
+| 25 | [Bulk Transcript Processor (rate-limit handling)](n8n/25-bulk-transcript-processor) | n8n | Batch-process many video URLs with batching, retry/backoff, and success/failure rows. Credit-safe. For data/ops teams. |
+| 26 | [Video → Short-Form Script Pack](n8n/26-video-short-form-script-pack) | n8n | Turn one long video into 3–5 Reels/Shorts/TikTok scripts (hook, beats, caption, CTA). For content creators. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 
