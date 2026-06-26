@@ -16,8 +16,12 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 |---|----------|----------|--------------|
 | 01 | [Single Video → Transcript → AI Summary](n8n/01-single-video-transcript-summary) | n8n | Paste one YouTube URL, get a clean transcript and a 5-bullet AI summary. The simplest way to see TranscriptAPI work. |
 | 02 | [Channel → Latest Videos → Summaries → Notion](n8n/02-channel-latest-videos-to-notion) | n8n | Every day, grab a channel's newest videos, transcribe each, summarize with an LLM, and append a row to Notion. Set-and-forget content monitoring. |
+| 03 | [Video → Transcript → SEO Blog-Post Draft](n8n/03-video-to-seo-blog-post) | n8n | Repurpose one video into a publish-ready blog draft — SEO title, meta description, slug, tags, and a full Markdown article. For content marketers. |
+| 04 | [Playlist / Channel → Transcripts → RAG Chunks](n8n/04-playlist-to-rag-chunks) | n8n | Transcribe a whole playlist and emit clean, overlapping `{id, text, metadata}` chunks ready to embed into a vector DB. For RAG / agent builders. |
+| 05 | [New-Upload Monitor → Key Points → Slack](n8n/05-new-upload-monitor-slack-digest) | n8n | Watch a channel and get a Slack digest of key takeaways whenever it posts something new. For teams tracking channels/competitors. |
+| 06 | [Video → Transcript → Translate → Multilingual Summary](n8n/06-video-translate-multilingual-summary) | n8n | Translate + summarize any video into a target language (translated title, bullet summary, key topics). For global creators and localizers. |
 
-More workflows (Make.com blueprints, Slack digests, RAG ingestion, translation) are on the way — [contributions welcome](CONTRIBUTING.md).
+More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 
 ---
 

@@ -1,0 +1,199 @@
+{
+  "id": "TApiWf06Trans01",
+  "name": "Video → Transcript → Translate → Multilingual Summary (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "66666666-6666-4666-8666-666666666601",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a6666666-6666-4666-8666-666666666aaa",
+              "name": "videoUrl",
+              "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+              "type": "string"
+            },
+            {
+              "id": "a6666666-6666-4666-8666-666666666bbb",
+              "name": "targetLanguage",
+              "value": "Spanish",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "66666666-6666-4666-8666-666666666602",
+      "name": "Set Inputs",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "66666666-6666-4666-8666-666666666603",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Join the transcript and carry the target language + title forward.\nconst data = $input.first().json;\nconst transcriptText = (data.transcript || []).map((s) => s.text).join(' ');\nconst meta = data.metadata || {};\nreturn [\n  {\n    json: {\n      videoId: data.video_id,\n      title: meta.title || null,\n      language: data.language || null,\n      targetLanguage: $('Set Inputs').first().json.targetLanguage,\n      transcriptText,\n    },\n  },\n];"
+      },
+      "id": "66666666-6666-4666-8666-666666666604",
+      "name": "Build Transcript Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a professional translator and summarizer. Translate and condense the YouTube transcript into ' + $json.targetLanguage + '. Respond ONLY with a JSON object with keys: translated_title (string in ' + $json.targetLanguage + '), summary_bullets (array of 5-7 strings, each a key point written in ' + $json.targetLanguage + '), key_topics (array of 3-5 short topic labels in ' + $json.targetLanguage + ').' }, { role: 'user', content: 'Original title: ' + ($json.title || 'Untitled') + '\\nOriginal language: ' + ($json.language || 'unknown') + '\\n\\nTranscript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "66666666-6666-4666-8666-666666666605",
+      "name": "Translate & Summarize (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the multilingual JSON result into clean fields (graceful fallback).\nconst raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r;\ntry { r = JSON.parse(raw); } catch (e) { r = {}; }\nconst src = $('Build Transcript Text').first().json;\nreturn [\n  {\n    json: {\n      sourceVideoId: src.videoId,\n      sourceTitle: src.title,\n      targetLanguage: src.targetLanguage,\n      translatedTitle: r.translated_title || null,\n      summaryBullets: r.summary_bullets || [],\n      keyTopics: r.key_topics || [],\n      summaryText: Array.isArray(r.summary_bullets) ? r.summary_bullets.map((b) => '• ' + b).join('\\n') : raw,\n    },\n  },\n];"
+      },
+      "id": "66666666-6666-4666-8666-666666666606",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Inputs": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Transcript Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Transcript Text": {
+      "main": [
+        [
+          {
+            "node": "Translate & Summarize (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Translate & Summarize (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

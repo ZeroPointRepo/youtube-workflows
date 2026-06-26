@@ -1,0 +1,223 @@
+{
+  "id": "TApiWf04Rag01",
+  "name": "Playlist/Channel → Transcripts → RAG Chunks (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "44444444-4444-4444-8444-444444444401",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a4444444-4444-4444-8444-444444444aaa",
+              "name": "playlistUrl",
+              "value": "REPLACE_WITH_PLAYLIST_URL_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "44444444-4444-4444-8444-444444444402",
+      "name": "Set Playlist Source",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/playlist/videos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "playlist",
+              "value": "={{ $json.playlistUrl }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "44444444-4444-4444-8444-444444444403",
+      "name": "Get Playlist Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split the playlist/videos response into one item per video (watch URL + title).\nconst data = $input.first().json;\nconst videos = data.results || [];\nreturn videos.map((v) => ({\n  json: {\n    videoId: v.videoId,\n    videoTitle: v.title || null,\n    videoUrl: 'https://www.youtube.com/watch?v=' + v.videoId,\n  },\n}));"
+      },
+      "id": "44444444-4444-4444-8444-444444444404",
+      "name": "Extract Video List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 5
+      },
+      "id": "44444444-4444-4444-8444-444444444405",
+      "name": "Keep First 5",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "44444444-4444-4444-8444-444444444406",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turn each video transcript into clean, overlapping text chunks ready to embed.\n// Output: one item per chunk, shaped for a vector DB ({ id, text, metadata }).\nconst CHUNK_WORDS = 200;   // embedding-friendly window size\nconst OVERLAP_WORDS = 30;  // context overlap between adjacent chunks\nconst out = [];\nfor (const item of $input.all()) {\n  const d = item.json;\n  const segments = Array.isArray(d.transcript) ? d.transcript : [];\n  if (segments.length === 0) continue; // skip videos without captions (cost 0 credits)\n  const meta = d.metadata || {};\n  const videoId = d.video_id;\n  const words = segments.map((s) => s.text).join(' ').split(' ').filter((w) => w.length > 0);\n  const step = Math.max(1, CHUNK_WORDS - OVERLAP_WORDS);\n  const chunks = [];\n  for (let i = 0; i < words.length; i += step) {\n    chunks.push(words.slice(i, i + CHUNK_WORDS).join(' '));\n    if (i + CHUNK_WORDS >= words.length) break;\n  }\n  chunks.forEach((text, idx) => {\n    out.push({\n      json: {\n        id: videoId + '-' + idx,\n        text,\n        metadata: {\n          video_id: videoId,\n          video_title: meta.title || null,\n          video_url: 'https://www.youtube.com/watch?v=' + videoId,\n          author: meta.author_name || null,\n          language: d.language || null,\n          chunk_index: idx,\n          total_chunks: chunks.length,\n          char_count: text.length,\n        },\n      },\n    });\n  });\n}\nreturn out;"
+      },
+      "id": "44444444-4444-4444-8444-444444444407",
+      "name": "Chunk for RAG",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Playlist Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Playlist Source": {
+      "main": [
+        [
+          {
+            "node": "Get Playlist Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Playlist Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Extract Video List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Video List": {
+      "main": [
+        [
+          {
+            "node": "Keep First 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep First 5": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Chunk for RAG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
