@@ -1,0 +1,310 @@
+{
+  "id": "TApiWf10BrandMon01",
+  "name": "Brand-Mention Monitor → Search → Transcripts → Slack (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
+      "name": "Every Day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaab1",
+              "name": "searchQuery",
+              "value": "REPLACE_WITH_BRAND_OR_KEYWORD",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02",
+      "name": "Set Keyword",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.searchQuery }}"
+            },
+            {
+              "name": "type",
+              "value": "video"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03",
+      "name": "Search Mentions (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        200,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keep captioned search results published recently — a stateless \"new mention\" gate\n// (no DB). publishedTimeText is relative (\"2 days ago\"); approximate its age in days.\nconst LOOKBACK_DAYS = 1; // match to the daily schedule; widen it if you run less often\nfunction ageDays(txt) {\n  if (!txt) return 99999;\n  const t = txt.toLowerCase();\n  if (t.includes('second') || t.includes('minute') || t.includes('hour') || t.includes('today') || t.includes('just now')) return 0;\n  const n0 = parseInt(t.split(' ')[0], 10);\n  const n = isNaN(n0) ? 1 : n0; // \"a day ago\" / \"an hour ago\"\n  if (t.includes('day')) return n;\n  if (t.includes('week')) return n * 7;\n  if (t.includes('month')) return n * 30;\n  if (t.includes('year')) return n * 365;\n  return 99999;\n}\nconst data = $input.first().json;\nconst results = data.results || [];\nreturn results\n  .filter((r) => r.hasCaptions && ageDays(r.publishedTimeText) <= LOOKBACK_DAYS)\n  .map((r) => ({\n    json: {\n      videoId: r.videoId,\n      title: r.title || null,\n      channelTitle: r.channelTitle || null,\n      videoUrl: 'https://www.youtube.com/watch?v=' + r.videoId,\n      publishedTimeText: r.publishedTimeText || null,\n    },\n  }));"
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa04",
+      "name": "Filter New Mentions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 5
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa05",
+      "name": "Keep Top 5",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        640,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa06",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        860,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine recent mention transcripts into one digest input.\nconst MAX_CHARS_PER_SOURCE = 6000;\nconst mentions = [];\nconst blocks = [];\nfor (const item of $input.all()) {\n  const d = item.json;\n  const segments = Array.isArray(d.transcript) ? d.transcript : [];\n  if (segments.length === 0) continue;\n  const meta = d.metadata || {};\n  const videoId = d.video_id;\n  const title = meta.title || videoId;\n  const url = 'https://www.youtube.com/watch?v=' + videoId;\n  const text = segments.map((s) => s.text).join(' ').slice(0, MAX_CHARS_PER_SOURCE);\n  mentions.push({ title, videoUrl: url });\n  blocks.push('### ' + title + '\\n' + url + '\\n' + text);\n}\nreturn [\n  {\n    json: {\n      keyword: $('Set Keyword').first().json.searchQuery,\n      mentions,\n      mentionCount: mentions.length,\n      combinedText: blocks.join('\\n\\n'),\n    },\n  },\n];"
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa07",
+      "name": "Collect Mentions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [ { role: 'system', content: 'You are a brand and competitive-intelligence analyst. For each video below, write one Markdown bullet summarizing how it mentions or relates to the tracked keyword, in the form: \"- *<title>*: <1-2 sentence summary> (<url>)\". Use only what is in the transcripts. Start directly with the bullets, no preamble.' }, { role: 'user', content: 'Tracked keyword: ' + $json.keyword + '\\n\\nVideos:\\n\\n' + $json.combinedText } ] }) }}",
+        "options": {}
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa08",
+      "name": "Summarize Mentions (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: 'REPLACE_WITH_SLACK_CHANNEL_ID', text: '*🔎 New mentions of ' + ($('Collect Mentions').first().json.keyword || 'keyword') + '* (' + ($('Collect Mentions').first().json.mentionCount || 0) + ' new)\\n\\n' + $json.choices[0].message.content }) }}",
+        "options": {}
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa09",
+      "name": "Send Slack Digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_SLACK_CRED_ID",
+          "name": "Slack - Authorization Bearer"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Day": {
+      "main": [
+        [
+          {
+            "node": "Set Keyword",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Keyword": {
+      "main": [
+        [
+          {
+            "node": "Search Mentions (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Mentions (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Filter New Mentions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Mentions": {
+      "main": [
+        [
+          {
+            "node": "Keep Top 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Top 5": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Collect Mentions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Mentions": {
+      "main": [
+        [
+          {
+            "node": "Summarize Mentions (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize Mentions (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

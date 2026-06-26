@@ -1,0 +1,288 @@
+{
+  "id": "TApiWf07Research01",
+  "name": "Multi-Video Topic Researcher → Research Brief (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "77777777-7777-4777-8777-777777777701",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a7777777-7777-4777-8777-777777777aaa",
+              "name": "searchQuery",
+              "value": "open source LLMs",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "77777777-7777-4777-8777-777777777702",
+      "name": "Set Query",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.searchQuery }}"
+            },
+            {
+              "name": "type",
+              "value": "video"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "77777777-7777-4777-8777-777777777703",
+      "name": "Search Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keep only search results that have captions; emit one item per video.\nconst data = $input.first().json;\nconst results = data.results || [];\nreturn results\n  .filter((r) => r.hasCaptions)\n  .map((r) => ({\n    json: {\n      videoId: r.videoId,\n      title: r.title || null,\n      channelTitle: r.channelTitle || null,\n      videoUrl: 'https://www.youtube.com/watch?v=' + r.videoId,\n    },\n  }));"
+      },
+      "id": "77777777-7777-4777-8777-777777777704",
+      "name": "Extract Captioned Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 5
+      },
+      "id": "77777777-7777-4777-8777-777777777705",
+      "name": "Keep Top 5",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "77777777-7777-4777-8777-777777777706",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine the fetched transcripts into one bounded research corpus.\nconst MAX_CHARS_PER_SOURCE = 8000;\nconst sources = [];\nconst blocks = [];\nfor (const item of $input.all()) {\n  const d = item.json;\n  const segments = Array.isArray(d.transcript) ? d.transcript : [];\n  if (segments.length === 0) continue; // skip videos without captions\n  const meta = d.metadata || {};\n  const videoId = d.video_id;\n  const title = meta.title || videoId;\n  const url = 'https://www.youtube.com/watch?v=' + videoId;\n  const text = segments.map((s) => s.text).join(' ').slice(0, MAX_CHARS_PER_SOURCE);\n  sources.push({ title, videoUrl: url });\n  blocks.push('### ' + title + '\\n' + url + '\\n' + text);\n}\nreturn [\n  {\n    json: {\n      query: $('Set Query').first().json.searchQuery,\n      sources,\n      sourceCount: sources.length,\n      combinedText: blocks.join('\\n\\n'),\n    },\n  },\n];"
+      },
+      "id": "77777777-7777-4777-8777-777777777707",
+      "name": "Collect Transcripts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [ { role: 'system', content: 'You are a research analyst. Using ONLY the provided video transcripts, write a structured research brief in Markdown with these sections: ## Executive Summary, ## Key Themes, ## Points of Consensus, ## Points of Disagreement / Open Questions, ## Notable Takeaways. Be specific and reference video titles where relevant. Do not invent facts that are not in the transcripts.' }, { role: 'user', content: 'Research topic: ' + $json.query + '\\n\\nSource transcripts:\\n\\n' + $json.combinedText } ] }) }}",
+        "options": {}
+      },
+      "id": "77777777-7777-4777-8777-777777777708",
+      "name": "Synthesize Research Brief (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Attach the synthesized brief to the source list.\nconst raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nconst src = $('Collect Transcripts').first().json;\nreturn [\n  { json: { query: src.query, brief: raw, sources: src.sources, sourceCount: src.sourceCount } },\n];"
+      },
+      "id": "77777777-7777-4777-8777-777777777709",
+      "name": "Format Brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Query": {
+      "main": [
+        [
+          {
+            "node": "Search Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Extract Captioned Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Captioned Results": {
+      "main": [
+        [
+          {
+            "node": "Keep Top 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Top 5": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Collect Transcripts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Transcripts": {
+      "main": [
+        [
+          {
+            "node": "Synthesize Research Brief (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthesize Research Brief (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

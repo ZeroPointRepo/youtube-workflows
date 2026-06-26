@@ -20,6 +20,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 04 | [Playlist / Channel → Transcripts → RAG Chunks](n8n/04-playlist-to-rag-chunks) | n8n | Transcribe a whole playlist and emit clean, overlapping `{id, text, metadata}` chunks ready to embed into a vector DB. For RAG / agent builders. |
 | 05 | [New-Upload Monitor → Key Points → Slack](n8n/05-new-upload-monitor-slack-digest) | n8n | Watch a channel and get a Slack digest of key takeaways whenever it posts something new. For teams tracking channels/competitors. |
 | 06 | [Video → Transcript → Translate → Multilingual Summary](n8n/06-video-translate-multilingual-summary) | n8n | Translate + summarize any video into a target language (translated title, bullet summary, key topics). For global creators and localizers. |
+| 07 | [Multi-Video Topic Researcher → Research Brief](n8n/07-multi-video-topic-researcher) | n8n | Search a topic, transcribe the top results, and synthesize a structured research brief (themes, consensus, disagreements). For research/AI. |
+| 08 | [Video → LinkedIn Post](n8n/08-video-to-linkedin-post) | n8n | Repurpose one video into a ready-to-post LinkedIn update — hook, body, CTA, hashtags. For content repurposers. |
+| 09 | [Video → X (Twitter) Thread](n8n/09-video-to-x-thread) | n8n | Repurpose one video into a numbered 10-tweet X thread (hook → ideas → CTA). For content repurposers. |
+| 10 | [Brand-Mention Monitor → Slack Digest](n8n/10-brand-mention-monitor-slack) | n8n | Daily search for a brand/keyword, transcribe the new results, and post a Slack digest of mentions. For marketers / competitive intel. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 
