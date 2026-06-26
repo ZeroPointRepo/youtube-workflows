@@ -1,0 +1,288 @@
+{
+  "id": "TApiWf27Competitor01",
+  "name": "Competitor Analysis Agent (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "27272727-2727-4727-8727-272727272701",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "27272727-2727-4727-8727-2727272727a1",
+              "name": "searchQuery",
+              "value": "REPLACE_WITH_COMPETITOR_OR_BRAND",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "27272727-2727-4727-8727-272727272702",
+      "name": "Set Competitor",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -60,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.searchQuery }}"
+            },
+            {
+              "name": "type",
+              "value": "video"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "27272727-2727-4727-8727-272727272703",
+      "name": "Search Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn (data.results || []).filter((r) => r.hasCaptions).map((r) => ({ json: { videoId: r.videoId, title: r.title || null, channelTitle: r.channelTitle || null, videoUrl: 'https://www.youtube.com/watch?v=' + r.videoId } }));"
+      },
+      "id": "27272727-2727-4727-8727-272727272704",
+      "name": "Extract Captioned Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 5
+      },
+      "id": "27272727-2727-4727-8727-272727272705",
+      "name": "Keep Top 5",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "27272727-2727-4727-8727-272727272706",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        820,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const MAX = 8000; const sources = []; const blocks = [];\nfor (const item of $input.all()) {\n  const d = item.json; const seg = Array.isArray(d.transcript) ? d.transcript : [];\n  if (seg.length === 0) continue;\n  const meta = d.metadata || {}; const vid = d.video_id; const title = meta.title || vid;\n  const url = 'https://www.youtube.com/watch?v=' + vid;\n  const text = seg.map((s) => s.text).join(' ').slice(0, MAX);\n  sources.push({ title, videoUrl: url });\n  blocks.push('### ' + title + '\\n' + url + '\\n' + text);\n}\nreturn [ { json: { competitor: $('Set Competitor').first().json.searchQuery, sources, sourceCount: sources.length, combinedText: blocks.join('\\n\\n') } } ];"
+      },
+      "id": "27272727-2727-4727-8727-272727272707",
+      "name": "Collect Transcripts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [ { role: 'system', content: 'You are a competitive-intelligence analyst. Using ONLY the provided video transcripts about a competitor/brand, write a Markdown report with these sections: ## Positioning, ## Repeated Claims, ## Product Themes, ## Common Objections, ## Notable Quotes. Reference video titles where relevant. Do not invent facts that are not in the transcripts.' }, { role: 'user', content: 'Competitor / brand: ' + $json.competitor + '\\n\\nTranscripts:\\n\\n' + $json.combinedText } ] }) }}",
+        "options": {}
+      },
+      "id": "27272727-2727-4727-8727-272727272708",
+      "name": "Competitor Report (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1260,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nconst src = $('Collect Transcripts').first().json;\nreturn [ { json: { competitor: src.competitor, report: raw, sources: src.sources, sourceCount: src.sourceCount } } ];"
+      },
+      "id": "27272727-2727-4727-8727-272727272709",
+      "name": "Format Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1480,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Competitor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Competitor": {
+      "main": [
+        [
+          {
+            "node": "Search Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Extract Captioned Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Captioned Results": {
+      "main": [
+        [
+          {
+            "node": "Keep Top 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Top 5": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Collect Transcripts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Transcripts": {
+      "main": [
+        [
+          {
+            "node": "Competitor Report (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Competitor Report (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

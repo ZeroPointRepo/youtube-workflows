@@ -1,0 +1,288 @@
+{
+  "id": "TApiWf28SeoAnalyzer01",
+  "name": "YouTube SEO Title & Description Analyzer (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "28282828-2828-4828-8828-282828282801",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "28282828-2828-4828-8828-2828282828a1",
+              "name": "searchQuery",
+              "value": "REPLACE_WITH_TARGET_KEYWORD",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "28282828-2828-4828-8828-282828282802",
+      "name": "Set Keyword",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -80,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.searchQuery }}"
+            },
+            {
+              "name": "type",
+              "value": "video"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "28282828-2828-4828-8828-282828282803",
+      "name": "Search Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        140,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn (data.results || []).filter((r) => r.hasCaptions).map((r) => ({ json: { videoId: r.videoId, title: r.title || null, videoUrl: 'https://www.youtube.com/watch?v=' + r.videoId, viewCountText: r.viewCountText || null, lengthText: r.lengthText || null, publishedTimeText: r.publishedTimeText || null } }));"
+      },
+      "id": "28282828-2828-4828-8828-282828282804",
+      "name": "Extract Captioned Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 6
+      },
+      "id": "28282828-2828-4828-8828-282828282805",
+      "name": "Keep Top 6",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        580,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "28282828-2828-4828-8828-282828282806",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine search metadata (titles/views/length) with transcript snippets, matched by video id.\nconst SNIP = 1200;\nconst metaById = {}; $('Extract Captioned Results').all().forEach((i) => { metaById[i.json.videoId] = i.json; });\nconst titles = []; const blocks = [];\nfor (const item of $input.all()) {\n  const d = item.json; const seg = Array.isArray(d.transcript) ? d.transcript : [];\n  const vid = d.video_id; const m = metaById[vid] || {};\n  const title = (d.metadata && d.metadata.title) || m.title || vid;\n  const snippet = seg.map((s) => s.text).join(' ').slice(0, SNIP);\n  titles.push(title);\n  blocks.push('Title: ' + title + '\\nViews: ' + (m.viewCountText || '?') + ' | Length: ' + (m.lengthText || '?') + ' | Published: ' + (m.publishedTimeText || '?') + '\\nTranscript snippet: ' + snippet);\n}\nreturn [ { json: { keyword: $('Set Keyword').first().json.searchQuery, videoCount: blocks.length, titles, combinedText: blocks.join('\\n\\n') } } ];"
+      },
+      "id": "28282828-2828-4828-8828-282828282807",
+      "name": "Build SEO Corpus",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a YouTube SEO analyst. Given the top search results for a keyword (titles, view counts, lengths) plus transcript snippets, identify what is working and give recommendations. Respond ONLY with a JSON object with keys: patterns (array of strings on title/length/format patterns among the top results), title_recommendations (array of 5 suggested titles), description_recommendations (array of 3 description tips), target_keywords (array of 6-10 keyword phrases). Base it on the supplied data.' }, { role: 'user', content: 'Target keyword: ' + $json.keyword + '\\n\\nTop results:\\n\\n' + $json.combinedText } ] }) }}",
+        "options": {}
+      },
+      "id": "28282828-2828-4828-8828-282828282808",
+      "name": "Analyze SEO (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = {}; }\nconst src = $('Build SEO Corpus').first().json;\nreturn [\n  {\n    json: {\n      keyword: src.keyword,\n      analyzedVideos: src.videoCount,\n      patterns: r.patterns || [],\n      titleRecommendations: r.title_recommendations || [],\n      descriptionRecommendations: r.description_recommendations || [],\n      targetKeywords: r.target_keywords || [],\n    },\n  },\n];"
+      },
+      "id": "28282828-2828-4828-8828-282828282809",
+      "name": "Format SEO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Keyword",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Keyword": {
+      "main": [
+        [
+          {
+            "node": "Search Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Extract Captioned Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Captioned Results": {
+      "main": [
+        [
+          {
+            "node": "Keep Top 6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Top 6": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build SEO Corpus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build SEO Corpus": {
+      "main": [
+        [
+          {
+            "node": "Analyze SEO (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze SEO (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format SEO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

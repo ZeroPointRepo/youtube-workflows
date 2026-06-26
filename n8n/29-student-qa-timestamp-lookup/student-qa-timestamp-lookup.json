@@ -1,0 +1,270 @@
+{
+  "id": "TApiWf29StudentQA01",
+  "name": "Student Q&A → Video Timestamp Lookup (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "29292929-2929-4929-8929-292929292901",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "29292929-2929-4929-8929-2929292929a1",
+              "name": "question",
+              "value": "REPLACE_WITH_STUDENT_QUESTION",
+              "type": "string"
+            },
+            {
+              "id": "29292929-2929-4929-8929-2929292929a2",
+              "name": "channel",
+              "value": "REPLACE_WITH_COURSE_CHANNEL_HANDLE_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "29292929-2929-4929-8929-292929292902",
+      "name": "Set Question & Channel",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -60,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel }}"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.question }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "29292929-2929-4929-8929-292929292903",
+      "name": "Search Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pick the most relevant captioned video from the channel search results.\nconst data = $input.first().json;\nconst vids = (data.results || []).filter((r) => r.hasCaptions);\nif (vids.length === 0) return [];\nconst v = vids[0];\nreturn [ { json: { videoId: v.videoId, title: v.title || null, videoUrl: 'https://www.youtube.com/watch?v=' + v.videoId, question: $('Set Question & Channel').first().json.question } } ];"
+      },
+      "id": "29292929-2929-4929-8929-292929292904",
+      "name": "Pick Best Match",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "29292929-2929-4929-8929-292929292905",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        600,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function ts(sec) {\n  const s = Math.floor(sec || 0);\n  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;\n  const mm = (r < 10 ? '0' : '') + r;\n  return h > 0 ? (h + ':' + (m < 10 ? '0' : '') + m + ':' + mm) : (m + ':' + mm);\n}\nconst d = $json; const seg = Array.isArray(d.transcript) ? d.transcript : []; const meta = d.metadata || {};\nconst text = seg.map((s) => '[' + ts(s.start) + '] ' + s.text).join('\\n');\nconst src = $('Pick Best Match').first().json;\nreturn [ { json: { question: src.question, title: meta.title || src.title, videoUrl: src.videoUrl, transcriptText: text } } ];"
+      },
+      "id": "29292929-2929-4929-8929-292929292906",
+      "name": "Build Timestamped Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a course teaching assistant. Answer the student question using ONLY this timestamped lecture transcript. Respond ONLY with a JSON object with keys: answer (a concise answer), timestamps (array of objects with time (the [h:mm:ss] marker) and note (what is covered there) for the 1-3 most relevant moments), found (boolean: true only if the transcript actually addresses the question).' }, { role: 'user', content: 'Question: ' + $json.question + '\\n\\nTimestamped transcript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "29292929-2929-4929-8929-292929292907",
+      "name": "Answer with Timestamps (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = {}; }\nconst src = $('Build Timestamped Text').first().json;\nreturn [ { json: { question: src.question, answer: r.answer || null, found: r.found === true, sourceTitle: src.title, sourceVideoUrl: src.videoUrl, timestamps: r.timestamps || [] } } ];"
+      },
+      "id": "29292929-2929-4929-8929-292929292908",
+      "name": "Format Answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1260,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Question & Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Question & Channel": {
+      "main": [
+        [
+          {
+            "node": "Search Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Channel": {
+      "main": [
+        [
+          {
+            "node": "Pick Best Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Best Match": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Timestamped Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Timestamped Text": {
+      "main": [
+        [
+          {
+            "node": "Answer with Timestamps (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer with Timestamps (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

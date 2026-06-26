@@ -40,6 +40,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 24 | [Market Commentary Daily Brief](n8n/24-market-commentary-daily-brief) | n8n | Monitor finance/macro channels and post a daily market brief (themes, tickers, macro, risks) to Slack. For finance/analysts. |
 | 25 | [Bulk Transcript Processor (rate-limit handling)](n8n/25-bulk-transcript-processor) | n8n | Batch-process many video URLs with batching, retry/backoff, and success/failure rows. Credit-safe. For data/ops teams. |
 | 26 | [Video → Short-Form Script Pack](n8n/26-video-short-form-script-pack) | n8n | Turn one long video into 3–5 Reels/Shorts/TikTok scripts (hook, beats, caption, CTA). For content creators. |
+| 27 | [Competitor Analysis Agent](n8n/27-competitor-analysis-agent) | n8n | Search a competitor, transcribe top videos, and generate an intel report (positioning, claims, themes, objections, quotes). For marketers. |
+| 28 | [YouTube SEO Title & Description Analyzer](n8n/28-youtube-seo-analyzer) | n8n | Analyze top results for a keyword and get SEO patterns + title/description recommendations. For creators/marketers. |
+| 29 | [Student Q&A → Video Timestamp Lookup](n8n/29-student-qa-timestamp-lookup) | n8n | Ask a question against a course channel; get a concise answer with the source video and timestamps. For edtech/students. |
+| 30 | [Multi-Channel Content Database Ingester](n8n/30-multi-channel-content-db) | n8n | Resolve a list of channels, list their videos, and emit unified content-database rows. Low-credit, no transcripts. For data teams. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 

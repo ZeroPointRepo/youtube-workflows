@@ -1,0 +1,156 @@
+{
+  "id": "TApiWf30MultiChannelDB01",
+  "name": "Multi-Channel Content Database Ingester (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "30303030-3030-4030-8030-303030303001",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Channels to ingest (edit this list — @handle, channel URL, or UC... ID).\nconst channels = ['REPLACE_WITH_CHANNEL_1', 'REPLACE_WITH_CHANNEL_2', 'REPLACE_WITH_CHANNEL_3'];\nreturn channels.map((c) => ({ json: { channel: c } }));"
+      },
+      "id": "30303030-3030-4030-8030-303030303002",
+      "name": "Set Channel List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/resolve",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "input",
+              "value": "={{ $json.channel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "30303030-3030-4030-8030-303030303003",
+      "name": "Resolve Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        200,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/videos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "30303030-3030-4030-8030-303030303004",
+      "name": "List Channel Videos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flatten each channel feed into unified content-database rows (no transcripts — low credit).\nconst out = [];\nfor (const item of $input.all()) {\n  const d = item.json; const info = d.playlist_info || {};\n  for (const v of (d.results || [])) {\n    out.push({\n      json: {\n        channelId: v.channelId || null,\n        channelTitle: v.channelTitle || info.ownerName || null,\n        channelHandle: v.channelHandle || null,\n        videoId: v.videoId,\n        title: v.title || null,\n        videoUrl: 'https://www.youtube.com/watch?v=' + v.videoId,\n        index: v.index || null,\n        lengthText: v.lengthText || null,\n        viewCountText: v.viewCountText || null,\n      },\n    });\n  }\n}\nreturn out;"
+      },
+      "id": "30303030-3030-4030-8030-303030303005",
+      "name": "Format Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Channel List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Channel List": {
+      "main": [
+        [
+          {
+            "node": "Resolve Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Channel": {
+      "main": [
+        [
+          {
+            "node": "List Channel Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Channel Videos": {
+      "main": [
+        [
+          {
+            "node": "Format Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
