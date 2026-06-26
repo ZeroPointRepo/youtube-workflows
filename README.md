@@ -24,6 +24,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 08 | [Video → LinkedIn Post](n8n/08-video-to-linkedin-post) | n8n | Repurpose one video into a ready-to-post LinkedIn update — hook, body, CTA, hashtags. For content repurposers. |
 | 09 | [Video → X (Twitter) Thread](n8n/09-video-to-x-thread) | n8n | Repurpose one video into a numbered 10-tweet X thread (hook → ideas → CTA). For content repurposers. |
 | 10 | [Brand-Mention Monitor → Slack Digest](n8n/10-brand-mention-monitor-slack) | n8n | Daily search for a brand/keyword, transcribe the new results, and post a Slack digest of mentions. For marketers / competitive intel. |
+| 11 | [Video → Content Classifier](n8n/11-video-to-content-classifier) | n8n | Auto-tag a video with category, content type, topics, and audience — structured for an Airtable/Notion content database. |
+| 12 | [Video → Newsletter Section](n8n/12-video-to-newsletter-section) | n8n | Turn a video into a polished newsletter section (headline + insights + takeaway), Substack/Beehiiv-ready. |
+| 13 | [Video → Key Quotes (with Timestamps)](n8n/13-key-quotes-extractor) | n8n | Extract 5–10 tweetable quotes with timestamps, one row per quote — ready for Airtable. |
+| 14 | [Video → Podcast Show Notes + Chapters](n8n/14-video-to-podcast-show-notes) | n8n | Generate a summary, timestamped chapter markers, and full Markdown show notes for any episode. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 

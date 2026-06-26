@@ -1,0 +1,193 @@
+{
+  "id": "TApiWf13Quotes01",
+  "name": "Video → Transcript → Key Quotes with Timestamps (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "dddddddd-dddd-4ddd-8ddd-dddddddddd01",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dddddddd-dddd-4ddd-8ddd-ddddddddddaa",
+              "name": "videoUrl",
+              "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dddddddd-dddd-4ddd-8ddd-dddddddddd02",
+      "name": "Set Video URL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        60,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dddddddd-dddd-4ddd-8ddd-dddddddddd03",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Join transcript segments with timestamps so the LLM can cite exact times.\nconst data = $input.first().json;\nconst meta = data.metadata || {};\nfunction ts(sec) {\n  const s = Math.floor(sec || 0);\n  const h = Math.floor(s / 3600);\n  const m = Math.floor((s % 3600) / 60);\n  const r = s % 60;\n  const mm = (r < 10 ? '0' : '') + r;\n  if (h > 0) return h + ':' + (m < 10 ? '0' : '') + m + ':' + mm;\n  return m + ':' + mm;\n}\nconst lines = (data.transcript || []).map((seg) => '[' + ts(seg.start) + '] ' + seg.text);\nreturn [\n  { json: { videoId: data.video_id, title: meta.title || null, language: data.language || null, transcriptText: lines.join('\\n') } },\n];"
+      },
+      "id": "dddddddd-dddd-4ddd-8ddd-dddddddddd04",
+      "name": "Build Transcript Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You extract the most quotable moments from a video. Using the timestamped transcript, return 5-10 short, tweetable, near-verbatim quotes. Respond ONLY with a JSON object with one key: quotes (an array of objects, each with: quote (string, max 240 chars) and timestamp (the nearest [m:ss] or [h:mm:ss] marker where it is said, without the brackets)).' }, { role: 'user', content: 'Video title: ' + ($json.title || 'Untitled') + '\\n\\nTimestamped transcript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "dddddddd-dddd-4ddd-8ddd-dddddddddd05",
+      "name": "Extract Quotes (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = {}; }\nconst quotes = Array.isArray(r.quotes) ? r.quotes : [];\nconst src = $('Build Transcript Text').first().json;\n// one item per quote — ready to append as Airtable rows\nreturn quotes.map((q) => ({\n  json: {\n    quote: q.quote || '',\n    timestamp: q.timestamp || '',\n    sourceTitle: src.title,\n    sourceVideoId: src.videoId,\n  },\n}));"
+      },
+      "id": "dddddddd-dddd-4ddd-8ddd-dddddddddd06",
+      "name": "Format Quotes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Video URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Video URL": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Transcript Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Transcript Text": {
+      "main": [
+        [
+          {
+            "node": "Extract Quotes (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Quotes (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Quotes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
