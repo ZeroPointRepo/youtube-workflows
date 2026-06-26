@@ -28,6 +28,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 12 | [Video → Newsletter Section](n8n/12-video-to-newsletter-section) | n8n | Turn a video into a polished newsletter section (headline + insights + takeaway), Substack/Beehiiv-ready. |
 | 13 | [Video → Key Quotes (with Timestamps)](n8n/13-key-quotes-extractor) | n8n | Extract 5–10 tweetable quotes with timestamps, one row per quote — ready for Airtable. |
 | 14 | [Video → Podcast Show Notes + Chapters](n8n/14-video-to-podcast-show-notes) | n8n | Generate a summary, timestamped chapter markers, and full Markdown show notes for any episode. |
+| 15 | [New-Upload → Webhook Trigger](n8n/15-new-upload-webhook-trigger) | n8n | Poll a channel and fire a webhook only on a genuinely new upload (last-seen-ID de-dupe). Free-endpoint based. For automation operators. |
+| 16 | [Slack Auto-Summary of Shared YouTube Links](n8n/16-slack-youtube-link-summary) | n8n | When a YouTube link is posted in Slack, reply with a 3-bullet summary. For internal/community Slack workspaces. |
+| 17 | [New Course Video → Auto Study Notes → Notion](n8n/17-new-course-video-notes) | n8n | When a course channel posts a lecture, generate structured study notes and save them to Notion. For edtech/students. |
+| 18 | [Weekly Industry Brief across Channels](n8n/18-weekly-industry-brief) | n8n | Monitor 5–10 channels and post one weekly executive brief from the new videos. For marketers/analysts. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 

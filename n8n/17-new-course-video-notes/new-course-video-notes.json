@@ -1,0 +1,315 @@
+{
+  "id": "TApiWf17Course01",
+  "name": "New Course Video → Auto Study Notes → Notion (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "id": "17171717-1717-4717-8717-171717171701",
+      "name": "Every Day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "17171717-1717-4717-8717-1717171717a1",
+              "name": "channel",
+              "value": "REPLACE_WITH_CHANNEL_HANDLE_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "17171717-1717-4717-8717-171717171702",
+      "name": "Set Channel",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -60,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/latest",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "17171717-1717-4717-8717-171717171703",
+      "name": "Get Latest Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fire only when the newest upload changes. Persists the last seen video ID in\n// workflow static data (survives across scheduled executions) — real dedupe, no DB.\nconst data = $input.first().json;\nconst videos = data.results || [];\nif (videos.length === 0) return [];\nconst v = videos[0];\nconst store = $getWorkflowStaticData('global');\nif (store.lastVideoId === v.videoId) return []; // already seen — nothing new\nstore.lastVideoId = v.videoId;\nreturn [\n  {\n    json: {\n      videoId: v.videoId,\n      title: v.title || null,\n      videoUrl: v.link || ('https://www.youtube.com/watch?v=' + v.videoId),\n      channelTitle: (data.channel && data.channel.title) || null,\n      published: v.published || null,\n    },\n  },\n];"
+      },
+      "id": "17171717-1717-4717-8717-171717171704",
+      "name": "Detect New Lecture",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "17171717-1717-4717-8717-171717171705",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        600,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst transcriptText = (data.transcript || []).map((s) => s.text).join(' ');\nconst meta = data.metadata || {};\nconst src = $('Detect New Lecture').first().json;\nreturn [\n  { json: { title: meta.title || src.title || null, videoUrl: src.videoUrl, transcriptText } },\n];"
+      },
+      "id": "17171717-1717-4717-8717-171717171706",
+      "name": "Build Transcript Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a study assistant. From the lecture transcript, produce structured study notes. Respond ONLY with a JSON object with keys: summary (2-3 sentences), key_concepts (array of 4-8 strings), definitions (array of objects with term and definition), study_questions (array of 3-5 strings), markdown (the full notes in Markdown: Summary, Key Concepts, Definitions, Study Questions).' }, { role: 'user', content: 'Lecture: ' + ($json.title || 'Untitled') + '\\n\\nTranscript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "17171717-1717-4717-8717-171717171707",
+      "name": "Generate Study Notes (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet n; try { n = JSON.parse(raw); } catch (e) { n = { markdown: raw }; }\nconst src = $('Build Transcript Text').first().json;\nreturn [\n  {\n    json: {\n      summary: n.summary || null,\n      keyConcepts: n.key_concepts || [],\n      definitions: n.definitions || [],\n      studyQuestions: n.study_questions || [],\n      markdown: n.markdown || '',\n      title: src.title,\n      videoUrl: src.videoUrl,\n    },\n  },\n];"
+      },
+      "id": "17171717-1717-4717-8717-171717171708",
+      "name": "Format Notes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ parent: { database_id: 'REPLACE_WITH_NOTION_DATABASE_ID' }, properties: { Name: { title: [ { text: { content: ($json.title || 'Lecture notes') } } ] }, URL: { url: $json.videoUrl }, Notes: { rich_text: [ { text: { content: ($json.markdown || '').slice(0, 1900) } } ] } } }) }}",
+        "options": {}
+      },
+      "id": "17171717-1717-4717-8717-171717171709",
+      "name": "Save to Notion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1480,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_NOTION_CRED_ID",
+          "name": "Notion - Authorization Bearer"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Day": {
+      "main": [
+        [
+          {
+            "node": "Set Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Channel": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Detect New Lecture",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect New Lecture": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Transcript Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Transcript Text": {
+      "main": [
+        [
+          {
+            "node": "Generate Study Notes (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Study Notes (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Notes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Notes": {
+      "main": [
+        [
+          {
+            "node": "Save to Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

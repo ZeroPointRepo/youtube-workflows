@@ -1,0 +1,202 @@
+{
+  "id": "TApiWf16SlackSum01",
+  "name": "Slack Auto-Summary of Shared YouTube Links (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "youtube-summary",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "16161616-1616-4616-8616-161616161601",
+      "name": "Slack/Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pull the first YouTube URL out of the incoming payload (Slack event, webhook body, or ?url=).\nconst b = $json.body || $json;\nconst text = (b && b.event && b.event.text) || b.text || b.url || ($json.query && $json.query.url) || '';\nconst slackChannel = (b && b.event && b.event.channel) || b.channel || 'REPLACE_WITH_SLACK_CHANNEL_ID';\nfunction clean(t) { return String(t).split('<').join('').split('>').join('').split('|')[0]; }\nfunction isYt(t) { return t.indexOf('youtu.be/') >= 0 || (t.indexOf('youtube.com') >= 0 && (t.indexOf('watch') >= 0 || t.indexOf('/shorts/') >= 0)); }\nconst tokens = String(text).split('\\n').join(' ').split(' ');\nlet videoUrl = null;\nfor (const tok of tokens) { const c = clean(tok); if (isYt(c)) { videoUrl = c; break; } }\nif (!videoUrl) return []; // no YouTube link found — nothing to do\nreturn [ { json: { videoUrl, slackChannel } } ];"
+      },
+      "id": "16161616-1616-4616-8616-161616161602",
+      "name": "Extract YouTube URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "16161616-1616-4616-8616-161616161603",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        180,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst transcriptText = (data.transcript || []).map((s) => s.text).join(' ');\nconst meta = data.metadata || {};\nreturn [\n  {\n    json: {\n      title: meta.title || null,\n      videoUrl: 'https://www.youtube.com/watch?v=' + data.video_id,\n      transcriptText,\n      slackChannel: $('Extract YouTube URL').first().json.slackChannel,\n    },\n  },\n];"
+      },
+      "id": "16161616-1616-4616-8616-161616161604",
+      "name": "Build Transcript Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [ { role: 'system', content: 'Summarize this YouTube video transcript in exactly 3 concise bullet points. Reply with only the 3 bullets, each starting with \"- \".' }, { role: 'user', content: 'Title: ' + ($json.title || '') + '\\n\\nTranscript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "16161616-1616-4616-8616-161616161605",
+      "name": "Summarize (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        620,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: $('Extract YouTube URL').first().json.slackChannel, text: '*' + ($('Build Transcript Text').first().json.title || 'YouTube summary') + '*\\n' + $('Build Transcript Text').first().json.videoUrl + '\\n\\n' + $json.choices[0].message.content }) }}",
+        "options": {}
+      },
+      "id": "16161616-1616-4616-8616-161616161606",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        840,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_SLACK_CRED_ID",
+          "name": "Slack - Authorization Bearer"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Slack/Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract YouTube URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract YouTube URL": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Transcript Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Transcript Text": {
+      "main": [
+        [
+          {
+            "node": "Summarize (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

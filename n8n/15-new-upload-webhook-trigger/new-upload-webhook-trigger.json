@@ -1,0 +1,168 @@
+{
+  "id": "TApiWf15Webhook01",
+  "name": "New-Upload → Webhook Trigger (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "15151515-1515-4515-8515-151515151501",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "15151515-1515-4515-8515-1515151515a1",
+              "name": "channel",
+              "value": "REPLACE_WITH_CHANNEL_HANDLE_OR_ID",
+              "type": "string"
+            },
+            {
+              "id": "15151515-1515-4515-8515-1515151515a2",
+              "name": "webhookUrl",
+              "value": "REPLACE_WITH_YOUR_WEBHOOK_URL",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "15151515-1515-4515-8515-151515151502",
+      "name": "Set Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/latest",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "15151515-1515-4515-8515-151515151503",
+      "name": "Get Latest Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        180,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fire only when the newest upload changes. Persists the last seen video ID in\n// workflow static data (survives across scheduled executions) — real dedupe, no DB.\nconst data = $input.first().json;\nconst videos = data.results || [];\nif (videos.length === 0) return [];\nconst v = videos[0];\nconst store = $getWorkflowStaticData('global');\nif (store.lastVideoId === v.videoId) return []; // already seen — nothing new\nstore.lastVideoId = v.videoId;\nreturn [\n  {\n    json: {\n      videoId: v.videoId,\n      title: v.title || null,\n      videoUrl: v.link || ('https://www.youtube.com/watch?v=' + v.videoId),\n      channelTitle: (data.channel && data.channel.title) || null,\n      published: v.published || null,\n    },\n  },\n];"
+      },
+      "id": "15151515-1515-4515-8515-151515151504",
+      "name": "Detect New Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Set Config').first().json.webhookUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ event: 'new_youtube_upload', channel: $json.channelTitle, videoId: $json.videoId, title: $json.title, url: $json.videoUrl, published: $json.published }) }}",
+        "options": {}
+      },
+      "id": "15151515-1515-4515-8515-151515151505",
+      "name": "Fire Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        620,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Set Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Config": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Detect New Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect New Upload": {
+      "main": [
+        [
+          {
+            "node": "Fire Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
