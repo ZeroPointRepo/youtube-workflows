@@ -32,6 +32,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 16 | [Slack Auto-Summary of Shared YouTube Links](n8n/16-slack-youtube-link-summary) | n8n | When a YouTube link is posted in Slack, reply with a 3-bullet summary. For internal/community Slack workspaces. |
 | 17 | [New Course Video → Auto Study Notes → Notion](n8n/17-new-course-video-notes) | n8n | When a course channel posts a lecture, generate structured study notes and save them to Notion. For edtech/students. |
 | 18 | [Weekly Industry Brief across Channels](n8n/18-weekly-industry-brief) | n8n | Monitor 5–10 channels and post one weekly executive brief from the new videos. For marketers/analysts. |
+| 19 | [Channel → Full Video Metadata DB](n8n/19-channel-video-metadata-db) | n8n | Resolve a channel, list its uploads, and emit one metadata row per video — ready for Sheets/Airtable/a database. |
+| 20 | [Playlist → Full Text Corpus (CSV/JSON)](n8n/20-playlist-full-text-corpus) | n8n | Turn a playlist into a structured corpus: one row per video with metadata + full transcript text. For research/datasets. |
+| 21 | [Playlist → Quiz / Flashcard Generator](n8n/21-playlist-quiz-flashcards) | n8n | Transcribe lectures and generate Anki-style flashcards + quiz questions, one row per card. For edtech/students. |
+| 22 | [Earnings-Call Tracker → Analyst Summary → Slack](n8n/22-earnings-call-tracker) | n8n | Watch an IR channel; on a new earnings call, transcribe it and post an analyst summary to Slack. For investors/analysts. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 

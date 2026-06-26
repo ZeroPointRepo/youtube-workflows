@@ -1,0 +1,284 @@
+{
+  "id": "TApiWf21Quiz01",
+  "name": "Playlist → Quiz / Flashcard Generator (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "21212121-2121-4121-8121-212121212101",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "21212121-2121-4121-8121-2121212121a1",
+              "name": "playlistUrl",
+              "value": "REPLACE_WITH_PLAYLIST_URL_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "21212121-2121-4121-8121-212121212102",
+      "name": "Set Playlist",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -60,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/playlist/videos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "playlist",
+              "value": "={{ $json.playlistUrl }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "21212121-2121-4121-8121-212121212103",
+      "name": "Get Playlist Videos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per playlist video (watch URL + title).\nconst data = $input.first().json;\nreturn (data.results || []).map((v) => ({\n  json: { videoId: v.videoId, videoTitle: v.title || null, videoUrl: 'https://www.youtube.com/watch?v=' + v.videoId },\n}));"
+      },
+      "id": "21212121-2121-4121-8121-212121212104",
+      "name": "Extract Video List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 3
+      },
+      "id": "21212121-2121-4121-8121-212121212105",
+      "name": "Keep First 3",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "21212121-2121-4121-8121-212121212106",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        820,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine the lecture transcripts into one bounded corpus, source-tagged.\nconst MAX = 6000;\nconst sources = [];\nconst blocks = [];\nfor (const item of $input.all()) {\n  const d = item.json;\n  const seg = Array.isArray(d.transcript) ? d.transcript : [];\n  if (seg.length === 0) continue;\n  const meta = d.metadata || {};\n  const vid = d.video_id;\n  const title = meta.title || vid;\n  const text = seg.map((s) => s.text).join(' ').slice(0, MAX);\n  sources.push({ title, videoUrl: 'https://www.youtube.com/watch?v=' + vid });\n  blocks.push('### ' + title + '\\n' + text);\n}\nreturn [ { json: { sources, sourceCount: sources.length, combinedText: blocks.join('\\n\\n') } } ];"
+      },
+      "id": "21212121-2121-4121-8121-212121212107",
+      "name": "Collect Transcripts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a study-tools generator. From the lecture transcripts, create study material. Respond ONLY with a JSON object with keys: flashcards (array of objects with front, back, source) and quiz (array of objects with question, options (array of 4 strings), answer (the correct option text), source). \"source\" is the video title the item came from. Produce 6-10 flashcards and 4-6 quiz questions total across all videos. Base everything only on the transcripts.' }, { role: 'user', content: 'Lecture transcripts:\\n\\n' + $json.combinedText } ] }) }}",
+        "options": {}
+      },
+      "id": "21212121-2121-4121-8121-212121212108",
+      "name": "Generate Quiz & Flashcards (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1260,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fan out into one row per flashcard / quiz item — Notion/Airtable/CSV-ready.\nconst raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = {}; }\nconst out = [];\n(r.flashcards || []).forEach((f) => out.push({ json: { type: 'flashcard', front: f.front || '', back: f.back || '', source: f.source || '' } }));\n(r.quiz || []).forEach((q) => out.push({ json: { type: 'quiz', question: q.question || '', options: q.options || [], answer: q.answer || '', source: q.source || '' } }));\nreturn out;"
+      },
+      "id": "21212121-2121-4121-8121-212121212109",
+      "name": "Format Cards",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1480,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Playlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Playlist": {
+      "main": [
+        [
+          {
+            "node": "Get Playlist Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Playlist Videos": {
+      "main": [
+        [
+          {
+            "node": "Extract Video List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Video List": {
+      "main": [
+        [
+          {
+            "node": "Keep First 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep First 3": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Collect Transcripts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Transcripts": {
+      "main": [
+        [
+          {
+            "node": "Generate Quiz & Flashcards (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Quiz & Flashcards (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Cards",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

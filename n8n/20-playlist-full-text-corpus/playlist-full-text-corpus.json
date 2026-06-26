@@ -1,0 +1,223 @@
+{
+  "id": "TApiWf20Corpus01",
+  "name": "Playlist → Full Text Corpus (CSV/JSON) (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "20202020-2020-4020-8020-202020202001",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "20202020-2020-4020-8020-2020202020a1",
+              "name": "playlistUrl",
+              "value": "REPLACE_WITH_PLAYLIST_URL_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "20202020-2020-4020-8020-202020202002",
+      "name": "Set Playlist",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/playlist/videos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "playlist",
+              "value": "={{ $json.playlistUrl }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "20202020-2020-4020-8020-202020202003",
+      "name": "Get Playlist Videos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        180,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per playlist video (watch URL + title).\nconst data = $input.first().json;\nreturn (data.results || []).map((v) => ({\n  json: { videoId: v.videoId, videoTitle: v.title || null, videoUrl: 'https://www.youtube.com/watch?v=' + v.videoId },\n}));"
+      },
+      "id": "20202020-2020-4020-8020-202020202004",
+      "name": "Extract Video List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 10
+      },
+      "id": "20202020-2020-4020-8020-202020202005",
+      "name": "Keep First 10",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        620,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "20202020-2020-4020-8020-202020202006",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        840,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// One CSV/JSON-ready row per video: metadata + full transcript text.\nconst out = [];\nfor (const item of $input.all()) {\n  const d = item.json;\n  const seg = Array.isArray(d.transcript) ? d.transcript : [];\n  if (seg.length === 0) continue; // skip videos without captions\n  const meta = d.metadata || {};\n  const vid = d.video_id;\n  const transcriptText = seg.map((s) => s.text).join(' ');\n  out.push({\n    json: {\n      videoId: vid,\n      title: meta.title || null,\n      author: meta.author_name || null,\n      videoUrl: 'https://www.youtube.com/watch?v=' + vid,\n      language: d.language || null,\n      segmentCount: seg.length,\n      wordCount: transcriptText.split(' ').filter((w) => w.length > 0).length,\n      transcriptText,\n    },\n  });\n}\nreturn out;"
+      },
+      "id": "20202020-2020-4020-8020-202020202007",
+      "name": "Format Corpus Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Playlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Playlist": {
+      "main": [
+        [
+          {
+            "node": "Get Playlist Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Playlist Videos": {
+      "main": [
+        [
+          {
+            "node": "Extract Video List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Video List": {
+      "main": [
+        [
+          {
+            "node": "Keep First 10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep First 10": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Format Corpus Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

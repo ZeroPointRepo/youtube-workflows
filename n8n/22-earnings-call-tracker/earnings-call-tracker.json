@@ -1,0 +1,282 @@
+{
+  "id": "TApiWf22Earnings01",
+  "name": "Earnings-Call Tracker → Analyst Summary → Slack (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "2c2c2c2c-2c2c-42c2-82c2-2c2c2c2c2c01",
+      "name": "Every Day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2c2c2c2c-2c2c-42c2-82c2-2c2c2c2c2ca1",
+              "name": "channel",
+              "value": "REPLACE_WITH_IR_CHANNEL_HANDLE_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2c2c2c2c-2c2c-42c2-82c2-2c2c2c2c2c02",
+      "name": "Set Channel",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -80,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/latest",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2c2c2c2c-2c2c-42c2-82c2-2c2c2c2c2c03",
+      "name": "Get Latest Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        140,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find the newest earnings/investor video and fire once per new one\n// (keyword match + last-seen ID in workflow static data — no DB).\nconst KEYWORDS = ['earnings', 'investor', 'quarter', 'fiscal', 'results', 'shareholder', 'q1', 'q2', 'q3', 'q4', 'annual report', 'guidance'];\nconst data = $input.first().json;\nconst videos = data.results || [];\nfunction isEarnings(t) { const s = (t || '').toLowerCase(); return KEYWORDS.some((k) => s.includes(k)); }\nconst match = videos.find((v) => isEarnings(v.title));\nif (!match) return [];\nconst store = $getWorkflowStaticData('global');\nif (store.lastEarningsId === match.videoId) return [];\nstore.lastEarningsId = match.videoId;\nreturn [\n  {\n    json: {\n      videoId: match.videoId,\n      title: match.title || null,\n      videoUrl: match.link || ('https://www.youtube.com/watch?v=' + match.videoId),\n      channelTitle: (data.channel && data.channel.title) || null,\n      published: match.published || null,\n    },\n  },\n];"
+      },
+      "id": "2c2c2c2c-2c2c-42c2-82c2-2c2c2c2c2c04",
+      "name": "Detect New Call",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2c2c2c2c-2c2c-42c2-82c2-2c2c2c2c2c05",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        580,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst transcriptText = (data.transcript || []).map((s) => s.text).join(' ');\nconst meta = data.metadata || {};\nconst src = $('Detect New Call').first().json;\nreturn [\n  { json: { title: meta.title || src.title || null, videoUrl: src.videoUrl, channelTitle: src.channelTitle, transcriptText } },\n];"
+      },
+      "id": "2c2c2c2c-2c2c-42c2-82c2-2c2c2c2c2c06",
+      "name": "Build Transcript Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [ { role: 'system', content: 'You are an equity analyst. Summarize this earnings call or investor update transcript into a concise brief in Markdown with sections: ## Headline, ## Key Numbers (revenue, growth, margins, guidance if stated), ## Highlights, ## Risks / Watch-outs, ## Tone. Use ONLY figures stated in the transcript; never invent numbers.' }, { role: 'user', content: 'Title: ' + ($json.title || '') + '\\n\\nTranscript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "2c2c2c2c-2c2c-42c2-82c2-2c2c2c2c2c07",
+      "name": "Analyst Summary (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: 'REPLACE_WITH_SLACK_CHANNEL_ID', text: '*📊 ' + ($('Build Transcript Text').first().json.title || 'Earnings update') + '*\\n' + $('Build Transcript Text').first().json.videoUrl + '\\n\\n' + $json.choices[0].message.content }) }}",
+        "options": {}
+      },
+      "id": "2c2c2c2c-2c2c-42c2-82c2-2c2c2c2c2c08",
+      "name": "Send Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_SLACK_CRED_ID",
+          "name": "Slack - Authorization Bearer"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Day": {
+      "main": [
+        [
+          {
+            "node": "Set Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Channel": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Detect New Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect New Call": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Transcript Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Transcript Text": {
+      "main": [
+        [
+          {
+            "node": "Analyst Summary (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyst Summary (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Send Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
