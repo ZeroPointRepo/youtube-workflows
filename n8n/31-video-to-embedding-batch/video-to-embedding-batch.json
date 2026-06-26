@@ -1,0 +1,185 @@
+{
+  "id": "TApiWf31Embeddings01",
+  "name": "Video-to-Embedding Batch Processor (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "31313131-3131-4131-8131-313131313101",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Paste a small batch of video URLs/IDs (keep it tiny — import-test friendly).\nconst videoUrls = ['REPLACE_WITH_VIDEO_URL_OR_ID_1', 'REPLACE_WITH_VIDEO_URL_OR_ID_2'];\nreturn videoUrls.map((u) => ({ json: { videoUrl: u } }));"
+      },
+      "id": "31313131-3131-4131-8131-313131313102",
+      "name": "Set Video List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "31313131-3131-4131-8131-313131313103",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split each transcript into ~200-word overlapping chunks ({ id, text, metadata }).\nconst CHUNK_WORDS = 200, OVERLAP = 30;\nconst out = [];\nfor (const item of $input.all()) {\n  const d = item.json; const seg = Array.isArray(d.transcript) ? d.transcript : [];\n  if (seg.length === 0) continue;\n  const meta = d.metadata || {}; const vid = d.video_id;\n  const words = seg.map((s) => s.text).join(' ').split(' ').filter((w) => w.length > 0);\n  const step = Math.max(1, CHUNK_WORDS - OVERLAP); const chunks = [];\n  for (let i = 0; i < words.length; i += step) {\n    chunks.push(words.slice(i, i + CHUNK_WORDS).join(' '));\n    if (i + CHUNK_WORDS >= words.length) break;\n  }\n  chunks.forEach((text, idx) => out.push({ json: {\n    id: vid + '-' + idx, text,\n    metadata: { video_id: vid, video_title: meta.title || null, video_url: 'https://www.youtube.com/watch?v=' + vid, chunk_index: idx, total_chunks: chunks.length },\n  } }));\n}\nreturn out;"
+      },
+      "id": "31313131-3131-4131-8131-313131313104",
+      "name": "Chunk Transcripts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'text-embedding-3-small', input: $json.text }) }}",
+        "options": {}
+      },
+      "id": "31313131-3131-4131-8131-313131313105",
+      "name": "Generate Embedding (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Combine each chunk with its embedding -> a Supabase pgvector-ready row.\nconst emb = ($json.data && $json.data[0] && $json.data[0].embedding) || [];\nconst c = $('Chunk Transcripts').item.json;\nreturn { json: { id: c.id, content: c.text, embedding: emb, metadata: c.metadata } };"
+      },
+      "id": "31313131-3131-4131-8131-313131313106",
+      "name": "Format pgvector Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Video List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Video List": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Chunk Transcripts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chunk Transcripts": {
+      "main": [
+        [
+          {
+            "node": "Generate Embedding (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Embedding (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Format pgvector Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,330 @@
+{
+  "id": "TApiWf32Sentiment01",
+  "name": "Channel Sentiment Pipeline (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "32323232-3232-4232-8232-323232323201",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "32323232-3232-4232-8232-3232323232a1",
+              "name": "channel",
+              "value": "REPLACE_WITH_CHANNEL_HANDLE_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "32323232-3232-4232-8232-323232323202",
+      "name": "Set Channel",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/latest",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "32323232-3232-4232-8232-323232323203",
+      "name": "Get Latest Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        120,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn (data.results || []).map((v) => ({ json: { videoId: v.videoId, title: v.title || null, videoUrl: v.link || ('https://www.youtube.com/watch?v=' + v.videoId) } }));"
+      },
+      "id": "32323232-3232-4232-8232-323232323204",
+      "name": "Extract Recent Videos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 3
+      },
+      "id": "32323232-3232-4232-8232-323232323205",
+      "name": "Keep First 3",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "32323232-3232-4232-8232-323232323206",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const d = $json; const seg = Array.isArray(d.transcript) ? d.transcript : []; const meta = d.metadata || {};\nconst src = $('Extract Recent Videos').item.json;\nconst transcriptText = seg.map((s) => s.text).join(' ');\nreturn { json: { title: meta.title || src.title, videoUrl: src.videoUrl, transcriptText, hasTranscript: transcriptText.length > 0 } };"
+      },
+      "id": "32323232-3232-4232-8232-323232323207",
+      "name": "Build Sentiment Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c3232323-3232-4232-8232-323232323ccc",
+              "leftValue": "={{ $json.hasTranscript }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "32323232-3232-4232-8232-323232323208",
+      "name": "Has Transcript?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You analyze a YouTube video transcript. Respond ONLY with a JSON object with keys: sentiment (one of positive, neutral, negative), sentiment_score (number from -1 to 1), topics (array of 3-6 topic tags), summary (1-2 sentences). Base it only on the transcript.' }, { role: 'user', content: 'Title: ' + ($json.title || '') + '\\n\\nTranscript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "32323232-3232-4232-8232-323232323209",
+      "name": "Score Sentiment (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = {}; }\nconst src = $('Build Sentiment Input').item.json;\nreturn { json: { title: src.title, videoUrl: src.videoUrl, sentiment: r.sentiment || null, sentimentScore: (typeof r.sentiment_score === \"number\" ? r.sentiment_score : null), topics: r.topics || [], summary: r.summary || null } };"
+      },
+      "id": "32323232-3232-4232-8232-323232323210",
+      "name": "Format Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Channel": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Extract Recent Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Recent Videos": {
+      "main": [
+        [
+          {
+            "node": "Keep First 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep First 3": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Sentiment Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Sentiment Input": {
+      "main": [
+        [
+          {
+            "node": "Has Transcript?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Transcript?": {
+      "main": [
+        [
+          {
+            "node": "Score Sentiment (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Sentiment (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

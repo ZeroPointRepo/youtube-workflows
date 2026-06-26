@@ -44,6 +44,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 28 | [YouTube SEO Title & Description Analyzer](n8n/28-youtube-seo-analyzer) | n8n | Analyze top results for a keyword and get SEO patterns + title/description recommendations. For creators/marketers. |
 | 29 | [Student Q&A → Video Timestamp Lookup](n8n/29-student-qa-timestamp-lookup) | n8n | Ask a question against a course channel; get a concise answer with the source video and timestamps. For edtech/students. |
 | 30 | [Multi-Channel Content Database Ingester](n8n/30-multi-channel-content-db) | n8n | Resolve a list of channels, list their videos, and emit unified content-database rows. Low-credit, no transcripts. For data teams. |
+| 31 | [Video-to-Embedding Batch Processor](n8n/31-video-to-embedding-batch) | n8n | Transcribe a batch of videos, chunk, and generate embeddings as Supabase pgvector-ready rows. For AI/RAG builders. |
+| 32 | [Channel Sentiment Pipeline](n8n/32-channel-sentiment-pipeline) | n8n | Score a channel's latest videos for sentiment + topics, one row per video. For analysts/marketers. |
+| 33 | [Topic Trend Tracker](n8n/33-topic-trend-tracker) | n8n | Weekly keyword search snapshots (result count + top-video metadata) to chart a topic over time. Low-credit. For marketers. |
+| 34 | [Share-of-Voice Analyzer](n8n/34-share-of-voice-analyzer) | n8n | Compare brand vs competitor presence in YouTube search results — rank, count, share-%. Search-only, low-credit. For marketers. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 

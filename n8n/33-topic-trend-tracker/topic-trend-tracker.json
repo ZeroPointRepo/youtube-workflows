@@ -1,0 +1,138 @@
+{
+  "id": "TApiWf33TrendTracker01",
+  "name": "Topic Trend Tracker (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 7,
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "3a3a3a3a-3a3a-43a3-83a3-3a3a3a3a3a01",
+      "name": "Every Week",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3a3a3a3a-3a3a-43a3-83a3-3a3a3a3a3aa1",
+              "name": "searchQuery",
+              "value": "REPLACE_WITH_TOPIC_KEYWORD",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3a3a3a3a-3a3a-43a3-83a3-3a3a3a3a3a02",
+      "name": "Set Keyword",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.searchQuery }}"
+            },
+            {
+              "name": "type",
+              "value": "video"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3a3a3a3a-3a3a-43a3-83a3-3a3a3a3a3a03",
+      "name": "Search Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        180,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// One trend-snapshot row per run (append to a sheet/DB to track over time).\nconst data = $input.first().json;\nconst results = data.results || [];\nconst top = results.slice(0, 10).map((r) => ({ videoId: r.videoId, title: r.title, channelTitle: r.channelTitle, viewCountText: r.viewCountText, lengthText: r.lengthText, publishedTimeText: r.publishedTimeText }));\nreturn [\n  {\n    json: {\n      keyword: $('Set Keyword').first().json.searchQuery,\n      snapshotAt: new Date().toISOString(),\n      resultCount: (typeof data.result_count === 'number' ? data.result_count : results.length),\n      hasMore: data.has_more === true,\n      topVideos: top,\n    },\n  },\n];"
+      },
+      "id": "3a3a3a3a-3a3a-43a3-83a3-3a3a3a3a3a04",
+      "name": "Build Trend Snapshot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Every Week": {
+      "main": [
+        [
+          {
+            "node": "Set Keyword",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Keyword": {
+      "main": [
+        [
+          {
+            "node": "Search Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Trend Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

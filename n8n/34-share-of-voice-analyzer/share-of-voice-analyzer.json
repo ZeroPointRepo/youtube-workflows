@@ -1,0 +1,118 @@
+{
+  "id": "TApiWf34ShareOfVoice01",
+  "name": "Share-of-Voice Analyzer (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "34343434-3434-4434-8434-343434343401",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Target keyword + the brands/competitors to measure (edit these).\nreturn [ { json: { keyword: 'REPLACE_WITH_TARGET_KEYWORD', brands: ['REPLACE_WITH_YOUR_BRAND', 'REPLACE_WITH_COMPETITOR_1', 'REPLACE_WITH_COMPETITOR_2'] } } ];"
+      },
+      "id": "34343434-3434-4434-8434-343434343402",
+      "name": "Set Inputs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.keyword }}"
+            },
+            {
+              "name": "type",
+              "value": "video"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "34343434-3434-4434-8434-343434343403",
+      "name": "Search Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        180,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Count how often each brand appears (title/channel) in the results -> share-of-voice rows.\nconst data = $input.first().json;\nconst results = data.results || [];\nconst total = results.length || 1;\nconst cfg = $('Set Inputs').first().json;\nconst brands = cfg.brands || [];\nconst rows = brands.map((b) => {\n  const term = String(b).toLowerCase();\n  const matches = results.filter((r) => (((r.title || '') + ' ' + (r.channelTitle || '')).toLowerCase()).includes(term));\n  const top = matches[0];\n  return {\n    brand: b,\n    mentions: matches.length,\n    sharePct: Math.round((matches.length / total) * 1000) / 10,\n    topExampleTitle: top ? (top.title || null) : null,\n    topExampleUrl: top ? ('https://www.youtube.com/watch?v=' + top.videoId) : null,\n  };\n});\nrows.sort((a, b) => b.mentions - a.mentions);\nreturn rows.map((r, i) => ({ json: { keyword: cfg.keyword, rank: i + 1, brand: r.brand, mentions: r.mentions, sharePct: r.sharePct, totalResults: results.length, topExampleTitle: r.topExampleTitle, topExampleUrl: r.topExampleUrl } }));"
+      },
+      "id": "34343434-3434-4434-8434-343434343404",
+      "name": "Compute Share of Voice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Inputs": {
+      "main": [
+        [
+          {
+            "node": "Search Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Compute Share of Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
