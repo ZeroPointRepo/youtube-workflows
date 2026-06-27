@@ -56,6 +56,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 40 | [Startup Pitch Research Tool](n8n/40-startup-pitch-research) | n8n | Research a startup from founder talks — claims, traction signals, risks, diligence questions. For investors/analysts. |
 | 41 | [Policy Speech Monitor](n8n/41-policy-speech-monitor) | n8n | Watch a policy/government channel and post a neutral Slack briefing when it publishes. For policy/comms teams. |
 | 42 | [Onboarding Video → Internal Wiki Page](n8n/42-onboarding-video-wiki) | n8n | Turn a training video into a Confluence/Notion-style wiki page (summary, steps, links, FAQ). For internal ops/L&D. |
+| 43 | [Channel → Pinecone RAG Ingestion](n8n/43-channel-pinecone-rag-ingestion) | n8n | Resolve a channel, transcribe, chunk, embed, and upsert vectors into Pinecone — a full YouTube → vector-DB pipeline. For AI/RAG builders. |
+| 44 | [Conference / Talk Archiver](n8n/44-conference-talk-archiver) | n8n | Archive a conference channel's talks into structured rows (title, speaker, company, summary, tags, links). For event/ops teams. |
+| 45 | [Customer Testimonial Mining](n8n/45-customer-testimonial-mining) | n8n | Mine positive customer quotes with timestamps, theme tags, confidence, and suggested marketing use. For marketers. |
+| 46 | [Meeting Prep Research Pack](n8n/46-meeting-prep-research-pack) | n8n | Research a company from its videos — narrative, announcements, pain points, objections, discovery questions. For sales/BD. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 
