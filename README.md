@@ -64,6 +64,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 48 | [Analyst Presentation Archiver](n8n/48-analyst-presentation-archiver) | n8n | Archive a research/IR channel's presentations into rows (company, speaker, event, key statements, risks). For finance/research. |
 | 49 | [Discourse Analysis Pipeline](n8n/49-discourse-analysis-pipeline) | n8n | Neutral thematic analysis of how a topic is discussed — frames, stance clusters, evidence snippets, caveats. For researchers/analysts. |
 | 50 | [Transcript Availability Checker](n8n/50-transcript-availability-checker) | n8n | Check a list of videos for caption availability — status, error reason, retry recommendation. Credit-safe. For data/ops teams. |
+| 51 | [YouTube Fact-Check Assistant](n8n/51-youtube-fact-check-assistant) | n8n | Extract checkable claims from a video into a human-review sheet — claim, timestamp deep-link, verify suggestion, unverified status. For fact-checkers/journalists. |
+| 52 | [Multi-Video Content Calendar Auditor](n8n/52-content-calendar-auditor) | n8n | Audit a channel's recent uploads (metadata-only, cheap) for themes, content gaps, and recommended next videos. For content strategists. |
+| 53 | [Niche Channel Discovery Tool](n8n/53-niche-channel-discovery) | n8n | Search a topic, dedupe channels, and score a ranked prospect list. Discovery only (no outreach). For marketers/researchers. |
+| 54 | [YouTube Citation Builder](n8n/54-youtube-citation-builder) | n8n | Generate APA/MLA/Chicago/BibTeX citations + timestamped snippet quotes from a video. For students/researchers. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 

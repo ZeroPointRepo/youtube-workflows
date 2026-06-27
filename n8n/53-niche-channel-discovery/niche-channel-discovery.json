@@ -1,0 +1,177 @@
+{
+  "id": "TApiWf53NicheDiscovery01",
+  "name": "Niche Channel Discovery Tool (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "53535353-5353-4353-8353-535353535301",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "53535353-5353-4353-8353-5353535353a1",
+              "name": "searchQuery",
+              "value": "REPLACE_WITH_TOPIC_OR_NICHE",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "53535353-5353-4353-8353-535353535302",
+      "name": "Set Topic",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.searchQuery }}"
+            },
+            {
+              "name": "type",
+              "value": "video"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "53535353-5353-4353-8353-535353535303",
+      "name": "Search Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn (data.results || []).filter((r) => r.channelId).map((r) => ({ json: {\n  channelId: r.channelId,\n  channelTitle: r.channelTitle || null,\n  channelHandle: r.channelHandle || null,\n  channelVerified: !!r.channelVerified,\n  videoId: r.videoId || null,\n  videoTitle: r.title || null,\n  viewCountText: r.viewCountText || null,\n  publishedTimeText: r.publishedTimeText || null,\n} }));"
+      },
+      "id": "53535353-5353-4353-8353-535353535304",
+      "name": "Extract Channels",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function parseViews(t) {\n  if (!t) return 0;\n  const s = String(t).toUpperCase().replace(/,/g, '');\n  const num = parseFloat(s);\n  if (isNaN(num)) return 0;\n  if (s.indexOf('B') > -1) return Math.round(num * 1e9);\n  if (s.indexOf('M') > -1) return Math.round(num * 1e6);\n  if (s.indexOf('K') > -1) return Math.round(num * 1e3);\n  return Math.round(num);\n}\nfunction popPoints(v) { return v >= 1e7 ? 5 : v >= 1e6 ? 4 : v >= 1e5 ? 3 : v >= 1e4 ? 2 : v > 0 ? 1 : 0; }\nconst byChannel = {};\nfor (const it of $input.all()) {\n  const d = it.json; if (!d.channelId) continue;\n  const k = d.channelId;\n  if (!byChannel[k]) byChannel[k] = { channelId: k, channelTitle: d.channelTitle, channelHandle: d.channelHandle, verified: !!d.channelVerified, appearances: 0, maxViews: 0, sampleVideos: [] };\n  const c = byChannel[k];\n  c.appearances += 1;\n  c.verified = c.verified || !!d.channelVerified;\n  const v = parseViews(d.viewCountText);\n  if (v > c.maxViews) c.maxViews = v;\n  if (c.sampleVideos.length < 3) c.sampleVideos.push({ title: d.videoTitle, videoId: d.videoId, url: 'https://www.youtube.com/watch?v=' + d.videoId, views: d.viewCountText });\n}\nconst ranked = Object.keys(byChannel).map((k) => {\n  const c = byChannel[k];\n  c.score = c.appearances * 10 + (c.verified ? 5 : 0) + popPoints(c.maxViews);\n  return c;\n}).sort((a, b) => (b.score - a.score) || (b.appearances - a.appearances) || (b.maxViews - a.maxViews));\nreturn ranked.map((c, i) => ({ json: Object.assign({}, c, { rank: i + 1 }) }));"
+      },
+      "id": "53535353-5353-4353-8353-535353535305",
+      "name": "Score & Rank Channels",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const c = $json;\nconst channelUrl = c.channelHandle ? ('https://www.youtube.com/' + c.channelHandle) : ('https://www.youtube.com/channel/' + c.channelId);\nreturn { json: {\n  rank: c.rank,\n  channel: c.channelTitle,\n  handle: c.channelHandle || null,\n  channelUrl,\n  verified: !!c.verified,\n  appearances: c.appearances,\n  topViews: c.maxViews,\n  score: c.score,\n  sampleVideos: c.sampleVideos,\n  note: 'Prospect for discovery/research only — verify fit manually. This workflow performs no outreach or contact.',\n} };"
+      },
+      "id": "53535353-5353-4353-8353-535353535306",
+      "name": "Format Ranked List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Topic": {
+      "main": [
+        [
+          {
+            "node": "Search Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Extract Channels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Channels": {
+      "main": [
+        [
+          {
+            "node": "Score & Rank Channels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score & Rank Channels": {
+      "main": [
+        [
+          {
+            "node": "Format Ranked List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

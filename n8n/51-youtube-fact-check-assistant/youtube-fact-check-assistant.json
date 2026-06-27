@@ -1,0 +1,193 @@
+{
+  "id": "TApiWf51FactCheck01",
+  "name": "YouTube Fact-Check Assistant (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "51515151-5151-4151-8151-515151515101",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "51515151-5151-4151-8151-5151515151a1",
+              "name": "videoUrl",
+              "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "51515151-5151-4151-8151-515151515102",
+      "name": "Set Video URL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "51515151-5151-4151-8151-515151515103",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function ts(sec) {\n  const s = Math.floor(sec || 0);\n  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;\n  const mm = (r < 10 ? '0' : '') + r;\n  return h > 0 ? (h + ':' + (m < 10 ? '0' : '') + m + ':' + mm) : (m + ':' + mm);\n}\nconst data = $input.first().json; const seg = Array.isArray(data.transcript) ? data.transcript : []; const meta = data.metadata || {};\nconst transcriptText = seg.map((s) => '[' + ts(s.start) + '] ' + s.text).join('\\n');\nreturn [ { json: { title: meta.title || null, author: meta.author_name || null, videoUrl: 'https://www.youtube.com/watch?v=' + data.video_id, transcriptText } } ];"
+      },
+      "id": "51515151-5151-4151-8151-515151515104",
+      "name": "Build Timestamped Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a fact-check ASSISTANT that prepares claims for HUMAN review. You do NOT decide what is true or false. From the timestamped transcript, extract distinct, checkable factual claims (statistics, dates, named events, attributions, and other verifiable statements). Ignore opinions, jokes, hypotheticals, and clearly subjective statements. Respond with a JSON object with keys: claims (array of objects with claim (a concise restatement), claim_type (one of statistic, date, event, attribution, definition, other), timestamp (the [m:ss] or [h:mm:ss] marker where it is stated), check_suggestion (a concrete source or method to verify it)), overall_caveats (array of strings). Extract only what is stated; never rate truthfulness.' }, { role: 'user', content: 'Title: ' + ($json.title || '') + '\\nChannel: ' + ($json.author || '') + '\\n\\nTimestamped transcript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "51515151-5151-4151-8151-515151515105",
+      "name": "Extract Claims (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = { claims: [] }; }\nconst src = $('Build Timestamped Text').first().json;\nfunction toSec(t) {\n  if (!t) return null;\n  const clean = String(t).split('[').join('').split(']').join('').trim();\n  const parts = clean.split(':').map(Number);\n  if (parts.some(isNaN)) return null;\n  let s = 0; for (const x of parts) s = s * 60 + x; return s;\n}\nconst rows = (r.claims || []).map((c, i) => {\n  const sec = toSec(c.timestamp);\n  return { json: {\n    n: i + 1,\n    claim: c.claim,\n    claimType: c.claim_type || null,\n    timestamp: c.timestamp || null,\n    deepLink: sec != null ? (src.videoUrl + '&t=' + sec + 's') : src.videoUrl,\n    checkSuggestion: c.check_suggestion || null,\n    status: 'unverified',\n    reviewerVerdict: '',\n    evidenceUrl: '',\n    sourceTitle: src.title,\n    videoUrl: src.videoUrl,\n  } };\n});\nif (!rows.length) return [ { json: { status: 'no_claims_extracted', sourceTitle: src.title, videoUrl: src.videoUrl, caveats: r.overall_caveats || [] } } ];\nrows[0].json.caveats = r.overall_caveats || [];\nreturn rows;"
+      },
+      "id": "51515151-5151-4151-8151-515151515106",
+      "name": "Format Review Sheet",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Video URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Video URL": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Timestamped Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Timestamped Text": {
+      "main": [
+        [
+          {
+            "node": "Extract Claims (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Claims (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Review Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

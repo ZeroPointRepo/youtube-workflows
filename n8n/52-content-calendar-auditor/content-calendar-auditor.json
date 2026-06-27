@@ -1,0 +1,275 @@
+{
+  "id": "TApiWf52CalendarAuditor01",
+  "name": "Multi-Video Content Calendar Auditor (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "52525252-5252-4252-8252-525252525201",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -340,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "52525252-5252-4252-8252-5252525252a1",
+              "name": "channel",
+              "value": "REPLACE_WITH_CHANNEL_HANDLE_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "52525252-5252-4252-8252-525252525202",
+      "name": "Set Channel",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/resolve",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "input",
+              "value": "={{ $json.channel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "52525252-5252-4252-8252-525252525203",
+      "name": "Resolve Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        100,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/videos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "52525252-5252-4252-8252-525252525204",
+      "name": "List Channel Videos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn (data.results || []).map((v, i) => ({ json: { index: v.index != null ? v.index : i, videoId: v.videoId, title: v.title || null, viewCountText: v.viewCountText || null, lengthText: v.lengthText || null, videoUrl: 'https://www.youtube.com/watch?v=' + v.videoId } }));"
+      },
+      "id": "52525252-5252-4252-8252-525252525205",
+      "name": "Extract Video List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 20
+      },
+      "id": "52525252-5252-4252-8252-525252525206",
+      "name": "Keep Recent 20",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst videos = items.map((it) => it.json);\nconst titlesText = videos.map((v, i) => (i + 1) + '. ' + (v.title || '(untitled)') + '  [' + (v.viewCountText || 'n/a views') + ', ' + (v.lengthText || 'n/a') + ']').join('\\n');\nreturn [ { json: { channel: $('Set Channel').first().json.channel, videoCount: videos.length, videos, titlesText } } ];"
+      },
+      "id": "52525252-5252-4252-8252-525252525207",
+      "name": "Build Audit Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a YouTube content strategist auditing the recent uploads of a channel (listed most-recent first). You are given an ordered list of recent video titles with view-count and length text. NOTE: exact publish dates are NOT available, so treat cadence as topic and series rotation and ordering rather than precise dates. Respond with a JSON object with keys: themes (array of objects with theme and example_titles), cadence_observations (array of strings about series, recurring formats, and ordering), content_gaps (array of strings), opportunities (array of strings), recommended_next (array of objects with title_idea and rationale). Base everything ONLY on the supplied titles and metadata; do not invent video content or dates.' }, { role: 'user', content: 'Channel: ' + ($json.channel || '') + '\\n\\nRecent videos (most recent first):\\n' + $json.titlesText } ] }) }}",
+        "options": {}
+      },
+      "id": "52525252-5252-4252-8252-525252525208",
+      "name": "Audit Calendar (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet a; try { a = JSON.parse(raw); } catch (e) { a = {}; }\nconst src = $('Build Audit Input').first().json;\nreturn [ { json: {\n  channel: src.channel,\n  videoCount: src.videoCount,\n  themes: a.themes || [],\n  cadenceObservations: a.cadence_observations || [],\n  contentGaps: a.content_gaps || [],\n  opportunities: a.opportunities || [],\n  recommendedNext: a.recommended_next || [],\n  sources: (src.videos || []).map((v) => ({ title: v.title, videoUrl: v.videoUrl })),\n} } ];"
+      },
+      "id": "52525252-5252-4252-8252-525252525209",
+      "name": "Format Audit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1420,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Channel": {
+      "main": [
+        [
+          {
+            "node": "Resolve Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Channel": {
+      "main": [
+        [
+          {
+            "node": "List Channel Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Channel Videos": {
+      "main": [
+        [
+          {
+            "node": "Extract Video List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Video List": {
+      "main": [
+        [
+          {
+            "node": "Keep Recent 20",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Recent 20": {
+      "main": [
+        [
+          {
+            "node": "Build Audit Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Audit Input": {
+      "main": [
+        [
+          {
+            "node": "Audit Calendar (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Calendar (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,156 @@
+{
+  "id": "TApiWf54CitationBuilder01",
+  "name": "YouTube Citation Builder (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "54545454-5454-4454-8454-545454545401",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "54545454-5454-4454-8454-5454545454a1",
+              "name": "videoUrl",
+              "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "54545454-5454-4454-8454-545454545402",
+      "name": "Set Video URL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "54545454-5454-4454-8454-545454545403",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        340,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst meta = d.metadata || {};\nconst seg = Array.isArray(d.transcript) ? d.transcript : [];\nconst vid = d.video_id;\nconst videoUrl = 'https://www.youtube.com/watch?v=' + vid;\nconst picks = [];\nif (seg.length) { const n = Math.min(4, seg.length); for (let i = 0; i < n; i++) { picks.push(seg[Math.floor((i + 0.5) * seg.length / n)]); } }\nreturn [ { json: { videoId: vid, videoUrl, author: meta.author_name || null, authorUrl: meta.author_url || null, title: meta.title || vid, snippetSegments: picks } } ];"
+      },
+      "id": "54545454-5454-4454-8454-545454545404",
+      "name": "Build Citation Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function ts(sec) {\n  const s = Math.floor(sec || 0);\n  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;\n  const mm = (r < 10 ? '0' : '') + r;\n  return h > 0 ? (h + ':' + (m < 10 ? '0' : '') + m + ':' + mm) : (m + ':' + mm);\n}\nconst s = $json;\nconst author = s.author || '[Author / channel — verify]';\nconst title = s.title;\nconst url = s.videoUrl;\nconst accessed = new Date().toISOString().slice(0, 10);\nconst apa = author + ' (n.d.). ' + title + ' [Video]. YouTube. ' + url;\nconst mla = '\"' + title + '.\" YouTube, uploaded by ' + author + ', ' + url + '. Accessed ' + accessed + '.';\nconst chicago = author + '. \"' + title + '.\" YouTube video. Accessed ' + accessed + '. ' + url + '.';\nconst key = ('youtube_' + (s.videoId || 'video')).replace(/[^A-Za-z0-9_]/g, '');\nconst bibtex = '@misc{' + key + ',\\n  author = {' + author + '},\\n  title = {' + title + '},\\n  howpublished = {YouTube video},\\n  note = {Accessed: ' + accessed + '},\\n  url = {' + url + '}\\n}';\nconst snippets = (s.snippetSegments || []).map((seg) => {\n  const sec = Math.floor(seg.start || 0);\n  const tsMark = ts(sec);\n  const deep = url + '&t=' + sec + 's';\n  return { timestamp: tsMark, seconds: sec, quote: seg.text, deepLink: deep, intext_citation: '(' + author + ', ' + tsMark + ')' };\n});\nreturn [ { json: {\n  videoUrl: url,\n  author,\n  title,\n  citations: { apa, mla, chicago, bibtex },\n  accessed,\n  snippets,\n  caveat: 'Citation templates only. The API does not provide a publication date (shown as n.d.) and the author is the channel name — verify both. Confirm the exact style edition required (APA 7, MLA 9, Chicago 17) and any institution or publisher requirements before submitting.',\n} } ];"
+      },
+      "id": "54545454-5454-4454-8454-545454545405",
+      "name": "Format Citations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Video URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Video URL": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Citation Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Citation Fields": {
+      "main": [
+        [
+          {
+            "node": "Format Citations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
