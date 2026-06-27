@@ -1,0 +1,223 @@
+{
+  "id": "TApiWf35Chatbot01",
+  "name": "Ask-a-Playlist Chatbot Builder (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "35353535-3535-4535-8535-353535353501",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "35353535-3535-4535-8535-3535353535a1",
+              "name": "playlistUrl",
+              "value": "REPLACE_WITH_PLAYLIST_URL_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "35353535-3535-4535-8535-353535353502",
+      "name": "Set Playlist",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -60,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/playlist/videos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "playlist",
+              "value": "={{ $json.playlistUrl }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "35353535-3535-4535-8535-353535353503",
+      "name": "Get Playlist Videos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn (data.results || []).map((v) => ({ json: { videoId: v.videoId, videoTitle: v.title || null, videoUrl: 'https://www.youtube.com/watch?v=' + v.videoId } }));"
+      },
+      "id": "35353535-3535-4535-8535-353535353504",
+      "name": "Extract Video List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 3
+      },
+      "id": "35353535-3535-4535-8535-353535353505",
+      "name": "Keep First 3",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "35353535-3535-4535-8535-353535353506",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        820,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build a chatbot knowledge base from the playlist: a config row + one KB-chunk row per chunk.\nconst CHUNK_WORDS = 220, OVERLAP = 40;\nconst kb = [];\nfor (const item of $input.all()) {\n  const d = item.json; const seg = Array.isArray(d.transcript) ? d.transcript : [];\n  if (seg.length === 0) continue;\n  const meta = d.metadata || {}; const vid = d.video_id; const title = meta.title || vid;\n  const url = 'https://www.youtube.com/watch?v=' + vid;\n  const words = seg.map((s) => s.text).join(' ').split(' ').filter((w) => w.length > 0);\n  const step = Math.max(1, CHUNK_WORDS - OVERLAP); let idx = 0;\n  for (let i = 0; i < words.length; i += step) {\n    kb.push({ json: { type: 'kb_chunk', id: vid + '-' + idx, text: words.slice(i, i + CHUNK_WORDS).join(' '), source_title: title, source_url: url, chunk_index: idx } });\n    idx++;\n    if (i + CHUNK_WORDS >= words.length) break;\n  }\n}\nconst config = { json: {\n  type: 'chatbot_config',\n  playlist: $('Set Playlist').first().json.playlistUrl,\n  kb_chunks: kb.length,\n  system_prompt: 'You are an assistant that answers questions using ONLY the provided playlist transcripts. If the answer is not in them, say you do not know. Always cite the source video title.',\n} };\nreturn [config].concat(kb);"
+      },
+      "id": "35353535-3535-4535-8535-353535353507",
+      "name": "Build Chatbot KB",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Playlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Playlist": {
+      "main": [
+        [
+          {
+            "node": "Get Playlist Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Playlist Videos": {
+      "main": [
+        [
+          {
+            "node": "Extract Video List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Video List": {
+      "main": [
+        [
+          {
+            "node": "Keep First 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep First 3": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Chatbot KB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

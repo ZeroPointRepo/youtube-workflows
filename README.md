@@ -48,6 +48,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 32 | [Channel Sentiment Pipeline](n8n/32-channel-sentiment-pipeline) | n8n | Score a channel's latest videos for sentiment + topics, one row per video. For analysts/marketers. |
 | 33 | [Topic Trend Tracker](n8n/33-topic-trend-tracker) | n8n | Weekly keyword search snapshots (result count + top-video metadata) to chart a topic over time. Low-credit. For marketers. |
 | 34 | [Share-of-Voice Analyzer](n8n/34-share-of-voice-analyzer) | n8n | Compare brand vs competitor presence in YouTube search results — rank, count, share-%. Search-only, low-credit. For marketers. |
+| 35 | [Ask-a-Playlist Chatbot Builder](n8n/35-ask-a-playlist-chatbot) | n8n | Transcribe a playlist and emit a chatbot knowledge base (config + KB chunks) for a Q&A agent. For AI builders. |
+| 36 | [Weekly Channel Digest → Ghost/Substack Draft](n8n/36-weekly-channel-digest) | n8n | Summarize a channel's week and post a ready-to-edit newsletter draft (placeholder publish). For creators. |
+| 37 | [Product Launch Watcher](n8n/37-product-launch-watcher) | n8n | Watch competitor channels and Slack-alert when new titles match launch/release keywords. Free, no transcripts. For marketers. |
+| 38 | [Influencer Vetting Pipeline](n8n/38-influencer-vetting-pipeline) | n8n | Resolve a creator, sample transcripts, and score brand-safety/fit with rationale + flags. For marketers/brands. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 

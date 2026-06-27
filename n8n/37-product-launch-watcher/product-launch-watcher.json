@@ -1,0 +1,160 @@
+{
+  "id": "TApiWf37LaunchWatcher01",
+  "name": "Product Launch Watcher (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "37373737-3737-4737-8737-373737373701",
+      "name": "Every Day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Competitor channels to watch (edit this list).\nconst channels = ['REPLACE_WITH_CHANNEL_1', 'REPLACE_WITH_CHANNEL_2', 'REPLACE_WITH_CHANNEL_3'];\nreturn channels.map((c) => ({ json: { channel: c } }));"
+      },
+      "id": "37373737-3737-4737-8737-373737373702",
+      "name": "Set Channels",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/latest",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "37373737-3737-4737-8737-373737373703",
+      "name": "Get Latest Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        140,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Alert on recent videos whose titles match launch keywords (deduped across runs via static data).\nconst KEYWORDS = ['launch', 'release', 'announc', 'introducing', 'unveil', 'available now', 'drops', 'reveal', 'first look', 'new '];\nconst WINDOW_DAYS = 2; const cutoff = Date.now() - WINDOW_DAYS * 864e5;\nfunction matched(t) { const s = (t || '').toLowerCase(); return KEYWORDS.find((k) => s.includes(k)) || null; }\nconst store = $getWorkflowStaticData('global'); store.seen = store.seen || [];\nconst seen = new Set(store.seen);\nconst launches = [];\nfor (const item of $input.all()) {\n  const d = item.json; const ch = (d.channel && d.channel.title) || null;\n  for (const v of (d.results || [])) {\n    const pub = v.published ? new Date(v.published).getTime() : 0;\n    const kw = matched(v.title);\n    if (kw && pub >= cutoff && !seen.has(v.videoId)) {\n      seen.add(v.videoId);\n      launches.push({ channelTitle: ch, title: v.title, videoUrl: v.link || ('https://www.youtube.com/watch?v=' + v.videoId), matchedKeyword: kw.trim() });\n    }\n  }\n}\nstore.seen = Array.from(seen).slice(-500);\nif (launches.length === 0) return [];\nconst text = launches.map((l) => '• *' + (l.channelTitle || 'channel') + '*: ' + l.title + ' (' + l.matchedKeyword + ')\\n' + l.videoUrl).join('\\n\\n');\nreturn [ { json: { count: launches.length, launches, text } } ];"
+      },
+      "id": "37373737-3737-4737-8737-373737373704",
+      "name": "Detect Launches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: 'REPLACE_WITH_SLACK_CHANNEL_ID', text: '*🚀 New launches detected (' + $json.count + ')*\\n\\n' + $json.text }) }}",
+        "options": {}
+      },
+      "id": "37373737-3737-4737-8737-373737373705",
+      "name": "Send Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        580,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_SLACK_CRED_ID",
+          "name": "Slack - Authorization Bearer"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Day": {
+      "main": [
+        [
+          {
+            "node": "Set Channels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Channels": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Detect Launches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Launches": {
+      "main": [
+        [
+          {
+            "node": "Send Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
