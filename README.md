@@ -51,6 +51,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 
+### 🤖 Also available as AI Agent Skills
+
+Every workflow above also ships as an **[AI agent skill](agent-skills/)** — a markdown skill file for Claude, Codex, OpenClaw, Hermes, and any agent that reads skill files. Same task, but your agent does the reasoning itself, so all you need is a TranscriptAPI key (**no separate AI/LLM key**). Browse all 34 in **[`agent-skills/`](agent-skills/)**.
+
 ---
 
 ## Setup — Your TranscriptAPI Key
