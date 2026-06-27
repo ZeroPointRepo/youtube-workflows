@@ -1,0 +1,193 @@
+{
+  "id": "TApiWf42Wiki01",
+  "name": "Onboarding Video → Internal Wiki Page (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "42424242-4242-4242-8242-424242424201",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "42424242-4242-4242-8242-4242424242a1",
+              "name": "videoUrl",
+              "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "42424242-4242-4242-8242-424242424202",
+      "name": "Set Video URL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "42424242-4242-4242-8242-424242424203",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst transcriptText = (data.transcript || []).map((s) => s.text).join(' ');\nconst meta = data.metadata || {};\nreturn [ { json: { title: meta.title || null, videoUrl: 'https://www.youtube.com/watch?v=' + data.video_id, transcriptText } } ];"
+      },
+      "id": "42424242-4242-4242-8242-424242424204",
+      "name": "Build Transcript Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a technical writer turning an onboarding/training video into an internal wiki page. Respond with a JSON object with keys: title (string), summary (2-3 sentences), steps (array of ordered step strings), links (array of any URLs or resources mentioned), faq (array of objects with q and a), markdown (the full Confluence/Notion-style page in Markdown: H1 title, Summary, a numbered Steps list, a Links section, and an FAQ section). Use only what is in the transcript.' }, { role: 'user', content: 'Video title: ' + ($json.title || 'Untitled') + '\\n\\nTranscript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "42424242-4242-4242-8242-424242424205",
+      "name": "Generate Wiki Page (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet w; try { w = JSON.parse(raw); } catch (e) { w = { markdown: raw }; }\nconst src = $('Build Transcript Text').first().json;\nreturn [ { json: { title: w.title || src.title || null, summary: w.summary || null, steps: w.steps || [], links: w.links || [], faq: w.faq || [], markdown: w.markdown || '', sourceVideoUrl: src.videoUrl } } ];"
+      },
+      "id": "42424242-4242-4242-8242-424242424206",
+      "name": "Format Wiki",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Video URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Video URL": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Transcript Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Transcript Text": {
+      "main": [
+        [
+          {
+            "node": "Generate Wiki Page (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Wiki Page (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Wiki",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

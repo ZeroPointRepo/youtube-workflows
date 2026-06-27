@@ -52,6 +52,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 36 | [Weekly Channel Digest → Ghost/Substack Draft](n8n/36-weekly-channel-digest) | n8n | Summarize a channel's week and post a ready-to-edit newsletter draft (placeholder publish). For creators. |
 | 37 | [Product Launch Watcher](n8n/37-product-launch-watcher) | n8n | Watch competitor channels and Slack-alert when new titles match launch/release keywords. Free, no transcripts. For marketers. |
 | 38 | [Influencer Vetting Pipeline](n8n/38-influencer-vetting-pipeline) | n8n | Resolve a creator, sample transcripts, and score brand-safety/fit with rationale + flags. For marketers/brands. |
+| 39 | [Speaker Research Brief](n8n/39-speaker-research-brief) | n8n | Search a speaker's talks and build a one-page brief — themes, talking points, timestamped evidence. For event/PR teams. |
+| 40 | [Startup Pitch Research Tool](n8n/40-startup-pitch-research) | n8n | Research a startup from founder talks — claims, traction signals, risks, diligence questions. For investors/analysts. |
+| 41 | [Policy Speech Monitor](n8n/41-policy-speech-monitor) | n8n | Watch a policy/government channel and post a neutral Slack briefing when it publishes. For policy/comms teams. |
+| 42 | [Onboarding Video → Internal Wiki Page](n8n/42-onboarding-video-wiki) | n8n | Turn a training video into a Confluence/Notion-style wiki page (summary, steps, links, FAQ). For internal ops/L&D. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 

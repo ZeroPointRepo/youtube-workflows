@@ -1,0 +1,283 @@
+{
+  "id": "TApiWf41PolicyMon01",
+  "name": "Policy Speech Monitor (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "41414141-4141-4141-8141-414141414101",
+      "name": "Every Day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "41414141-4141-4141-8141-4141414141a1",
+              "name": "channel",
+              "value": "REPLACE_WITH_POLICY_CHANNEL_HANDLE_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "41414141-4141-4141-8141-414141414102",
+      "name": "Set Channel",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -80,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/latest",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "41414141-4141-4141-8141-414141414103",
+      "name": "Get Latest Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        140,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fire once per new upload on a policy channel (last-seen ID in workflow static data).\nconst data = $input.first().json; const videos = data.results || [];\nif (videos.length === 0) return [];\nconst v = videos[0];\nconst store = $getWorkflowStaticData('global');\nif (store.lastVideoId === v.videoId) return [];\nstore.lastVideoId = v.videoId;\nreturn [ { json: { videoId: v.videoId, title: v.title || null, videoUrl: v.link || ('https://www.youtube.com/watch?v=' + v.videoId), channelTitle: (data.channel && data.channel.title) || null, published: v.published || null } } ];"
+      },
+      "id": "41414141-4141-4141-8141-414141414104",
+      "name": "Detect New Video",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "41414141-4141-4141-8141-414141414105",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        580,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const d = $json; const seg = Array.isArray(d.transcript) ? d.transcript : []; const meta = d.metadata || {};\nconst src = $('Detect New Video').first().json;\nconst transcriptText = seg.map((s) => s.text).join(' ');\nreturn [ { json: { title: meta.title || src.title, videoUrl: src.videoUrl, channelTitle: src.channelTitle, transcriptText } } ];"
+      },
+      "id": "41414141-4141-4141-8141-414141414106",
+      "name": "Build Transcript Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [ { role: 'system', content: 'You are a policy analyst. Summarize this transcript from a government / think-tank / policy channel into a neutral, factual Markdown briefing (an informational summary, not an endorsement) with sections: ## Summary, ## Key Points, ## Stated Positions & Announcements, ## Notable Quotes, ## Implications. Use only what is in the transcript; do not editorialize beyond it.' }, { role: 'user', content: 'Title: ' + ($json.title || '') + '\\n\\nTranscript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "41414141-4141-4141-8141-414141414107",
+      "name": "Summarize Policy (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: 'REPLACE_WITH_SLACK_CHANNEL_ID', text: '*🏛 New policy video: ' + ($('Build Transcript Text').first().json.title || '') + '*\\n' + $('Build Transcript Text').first().json.videoUrl + '\\n\\n' + $json.choices[0].message.content }) }}",
+        "options": {}
+      },
+      "id": "41414141-4141-4141-8141-414141414108",
+      "name": "Send Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_SLACK_CRED_ID",
+          "name": "Slack - Authorization Bearer"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Day": {
+      "main": [
+        [
+          {
+            "node": "Set Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Channel": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Detect New Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect New Video": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Transcript Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Transcript Text": {
+      "main": [
+        [
+          {
+            "node": "Summarize Policy (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize Policy (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Send Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,288 @@
+{
+  "id": "TApiWf39Speaker01",
+  "name": "Speaker Research Brief (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "39393939-3939-4939-8939-393939393901",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "39393939-3939-4939-8939-3939393939a1",
+              "name": "searchQuery",
+              "value": "REPLACE_WITH_SPEAKER_NAME",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "39393939-3939-4939-8939-393939393902",
+      "name": "Set Speaker",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -80,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.searchQuery }}"
+            },
+            {
+              "name": "type",
+              "value": "video"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "39393939-3939-4939-8939-393939393903",
+      "name": "Search Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        140,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn (data.results || []).filter((r) => r.hasCaptions).map((r) => ({ json: { videoId: r.videoId, title: r.title || null, channelTitle: r.channelTitle || null, videoUrl: 'https://www.youtube.com/watch?v=' + r.videoId } }));"
+      },
+      "id": "39393939-3939-4939-8939-393939393904",
+      "name": "Extract Captioned Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 4
+      },
+      "id": "39393939-3939-4939-8939-393939393905",
+      "name": "Keep Top 4",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        580,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "39393939-3939-4939-8939-393939393906",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function ts(sec) {\n  const s = Math.floor(sec || 0);\n  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;\n  const mm = (r < 10 ? '0' : '') + r;\n  return h > 0 ? (h + ':' + (m < 10 ? '0' : '') + m + ':' + mm) : (m + ':' + mm);\n}\nconst MAX = 4000; const sources = []; const blocks = [];\nfor (const item of $input.all()) {\n  const d = item.json; const seg = Array.isArray(d.transcript) ? d.transcript : [];\n  if (seg.length === 0) continue;\n  const meta = d.metadata || {}; const vid = d.video_id; const title = meta.title || vid;\n  const url = 'https://www.youtube.com/watch?v=' + vid;\n  const lines = seg.map((s) => '[' + ts(s.start) + '] ' + s.text).join('\\n').slice(0, MAX);\n  sources.push({ title, videoUrl: url });\n  blocks.push('### ' + title + ' (' + url + ')\\n' + lines);\n}\nreturn [ { json: { speaker: $('Set Speaker').first().json.searchQuery, sources, sourceCount: sources.length, combinedText: blocks.join('\\n\\n') } } ];"
+      },
+      "id": "39393939-3939-4939-8939-393939393907",
+      "name": "Collect Transcripts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a research assistant preparing a one-page speaker brief. Using ONLY the provided timestamped talk transcripts, respond with a JSON object with keys: bio_summary (2-3 neutral sentences on who they are, based on the talks), themes (array of 4-6 recurring themes), notable_talks (array of talk titles), likely_talking_points (array of 5-7 points they would likely raise), evidence_snippets (array of objects with quote (short, near-verbatim), timestamp (the [m:ss] marker), source_title). Do not invent facts not in the transcripts.' }, { role: 'user', content: 'Speaker: ' + $json.speaker + '\\n\\nTalk transcripts (timestamped):\\n\\n' + $json.combinedText } ] }) }}",
+        "options": {}
+      },
+      "id": "39393939-3939-4939-8939-393939393908",
+      "name": "Speaker Brief (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = {}; }\nconst src = $('Collect Transcripts').first().json;\nreturn [ { json: { speaker: src.speaker, bioSummary: r.bio_summary || null, themes: r.themes || [], notableTalks: r.notable_talks || [], likelyTalkingPoints: r.likely_talking_points || [], evidenceSnippets: r.evidence_snippets || [], sources: src.sources, sourceCount: src.sourceCount } } ];"
+      },
+      "id": "39393939-3939-4939-8939-393939393909",
+      "name": "Format Brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Speaker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Speaker": {
+      "main": [
+        [
+          {
+            "node": "Search Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Extract Captioned Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Captioned Results": {
+      "main": [
+        [
+          {
+            "node": "Keep Top 4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Top 4": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Collect Transcripts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Transcripts": {
+      "main": [
+        [
+          {
+            "node": "Speaker Brief (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Speaker Brief (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,288 @@
+{
+  "id": "TApiWf40Pitch01",
+  "name": "Startup Pitch Research Tool (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "40404040-4040-4040-8040-404040404001",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "40404040-4040-4040-8040-4040404040a1",
+              "name": "searchQuery",
+              "value": "REPLACE_WITH_STARTUP_OR_FOUNDER",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "40404040-4040-4040-8040-404040404002",
+      "name": "Set Startup",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -80,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.searchQuery }}"
+            },
+            {
+              "name": "type",
+              "value": "video"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "40404040-4040-4040-8040-404040404003",
+      "name": "Search Videos (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        140,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn (data.results || []).filter((r) => r.hasCaptions).map((r) => ({ json: { videoId: r.videoId, title: r.title || null, channelTitle: r.channelTitle || null, videoUrl: 'https://www.youtube.com/watch?v=' + r.videoId } }));"
+      },
+      "id": "40404040-4040-4040-8040-404040404004",
+      "name": "Extract Captioned Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 4
+      },
+      "id": "40404040-4040-4040-8040-404040404005",
+      "name": "Keep Top 4",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        580,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "40404040-4040-4040-8040-404040404006",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const MAX = 6000; const sources = []; const blocks = [];\nfor (const item of $input.all()) {\n  const d = item.json; const seg = Array.isArray(d.transcript) ? d.transcript : [];\n  if (seg.length === 0) continue;\n  const meta = d.metadata || {}; const vid = d.video_id; const title = meta.title || vid;\n  const text = seg.map((s) => s.text).join(' ').slice(0, MAX);\n  sources.push({ title, videoUrl: 'https://www.youtube.com/watch?v=' + vid });\n  blocks.push('### ' + title + '\\n' + text);\n}\nreturn [ { json: { startup: $('Set Startup').first().json.searchQuery, sources, sourceCount: sources.length, combinedText: blocks.join('\\n\\n') } } ];"
+      },
+      "id": "40404040-4040-4040-8040-404040404007",
+      "name": "Collect Transcripts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a venture analyst doing diligence from public founder talks / investor events. Using ONLY the transcripts, respond with a JSON object with keys: summary (3-4 sentences), claims (array of specific claims the founder or company makes), traction_signals (array of any growth/usage/revenue/customer signals mentioned), risks (array of risks or red flags), open_diligence_questions (array of 5-8 questions to ask next). Do not invent numbers or facts.' }, { role: 'user', content: 'Company / founder: ' + $json.startup + '\\n\\nTranscripts:\\n\\n' + $json.combinedText } ] }) }}",
+        "options": {}
+      },
+      "id": "40404040-4040-4040-8040-404040404008",
+      "name": "Pitch Research (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = {}; }\nconst src = $('Collect Transcripts').first().json;\nreturn [ { json: { startup: src.startup, summary: r.summary || null, claims: r.claims || [], tractionSignals: r.traction_signals || [], risks: r.risks || [], openDiligenceQuestions: r.open_diligence_questions || [], sources: src.sources } } ];"
+      },
+      "id": "40404040-4040-4040-8040-404040404009",
+      "name": "Format Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Startup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Startup": {
+      "main": [
+        [
+          {
+            "node": "Search Videos (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Videos (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Extract Captioned Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Captioned Results": {
+      "main": [
+        [
+          {
+            "node": "Keep Top 4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Top 4": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Collect Transcripts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Transcripts": {
+      "main": [
+        [
+          {
+            "node": "Pitch Research (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pitch Research (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
