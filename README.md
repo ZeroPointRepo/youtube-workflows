@@ -68,6 +68,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 52 | [Multi-Video Content Calendar Auditor](n8n/52-content-calendar-auditor) | n8n | Audit a channel's recent uploads (metadata-only, cheap) for themes, content gaps, and recommended next videos. For content strategists. |
 | 53 | [Niche Channel Discovery Tool](n8n/53-niche-channel-discovery) | n8n | Search a topic, dedupe channels, and score a ranked prospect list. Discovery only (no outreach). For marketers/researchers. |
 | 54 | [YouTube Citation Builder](n8n/54-youtube-citation-builder) | n8n | Generate APA/MLA/Chicago/BibTeX citations + timestamped snippet quotes from a video. For students/researchers. |
+| 55 | [Support FAQ Builder from Tutorials](n8n/55-support-faq-builder) | n8n | Draft support FAQ entries (question, answer, category, confidence) from a tutorial channel's videos. Human-review drafts. For support/KB teams. |
+| 56 | [Executive Interview Tracker](n8n/56-executive-interview-tracker) | n8n | Track an exec's public statements — summary, key statements, claims to verify, risks, follow-ups. Research aid. For IR/comms/analysts. |
+| 57 | [Longitudinal Content Tracker](n8n/57-longitudinal-content-tracker) | n8n | Weekly snapshots of a channel's new videos (free trigger, deduped) — summary/themes to track messaging drift. For comms/intel teams. |
+| 58 | [Course Glossary Builder](n8n/58-course-glossary-builder) | n8n | Build a glossary from a course playlist — terms, plain-English definitions, timestamp deep-links, study notes. For edtech/students. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 

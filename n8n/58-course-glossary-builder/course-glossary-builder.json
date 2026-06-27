@@ -1,0 +1,330 @@
+{
+  "id": "TApiWf58Glossary01",
+  "name": "Course Glossary Builder (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "58585858-5858-4858-8858-585858585801",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "58585858-5858-4858-8858-5858585858a1",
+              "name": "playlistUrl",
+              "value": "REPLACE_WITH_PLAYLIST_URL_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "58585858-5858-4858-8858-585858585802",
+      "name": "Set Playlist",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/playlist/videos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "playlist",
+              "value": "={{ $json.playlistUrl }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "58585858-5858-4858-8858-585858585803",
+      "name": "Get Playlist Videos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -20,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn (data.results || []).map((v) => ({ json: { videoId: v.videoId, videoTitle: v.title || null, videoUrl: 'https://www.youtube.com/watch?v=' + v.videoId } }));"
+      },
+      "id": "58585858-5858-4858-8858-585858585804",
+      "name": "Extract Video List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 5
+      },
+      "id": "58585858-5858-4858-8858-585858585805",
+      "name": "Keep First 5",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "58585858-5858-4858-8858-585858585806",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function ts(sec) {\n  const s = Math.floor(sec || 0);\n  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;\n  const mm = (r < 10 ? '0' : '') + r;\n  return h > 0 ? (h + ':' + (m < 10 ? '0' : '') + m + ':' + mm) : (m + ':' + mm);\n}\nconst d = $json; const seg = Array.isArray(d.transcript) ? d.transcript : []; const meta = d.metadata || {}; const vid = d.video_id;\nconst transcriptText = seg.map((s) => '[' + ts(s.start) + '] ' + s.text).join('\\n');\nreturn { json: { title: meta.title || vid, videoUrl: 'https://www.youtube.com/watch?v=' + vid, transcriptText, hasTranscript: transcriptText.length > 0 } };"
+      },
+      "id": "58585858-5858-4858-8858-585858585807",
+      "name": "Build Glossary Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c5858585-5858-4858-8858-585858585ccc",
+              "leftValue": "={{ $json.hasTranscript }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "58585858-5858-4858-8858-585858585808",
+      "name": "Has Transcript?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are building a course glossary from a timestamped lecture transcript. Respond with a JSON object with key terms: an array of objects with term, definition (plain-English, 1-2 sentences), timestamp (the [m:ss] or [h:mm:ss] marker where the term is introduced, or null), study_note (an optional tip, or null). Provide 5-15 terms. Define ONLY terms actually explained in the video.' }, { role: 'user', content: 'Lecture: ' + ($json.title || '') + '\\n\\nTimestamped transcript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "58585858-5858-4858-8858-585858585809",
+      "name": "Extract Terms (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function toSec(t) {\n  if (!t) return null;\n  const clean = String(t).split('[').join('').split(']').join('').trim();\n  const parts = clean.split(':').map(Number);\n  if (parts.some(isNaN)) return null;\n  let s = 0; for (const x of parts) s = s * 60 + x; return s;\n}\nconst raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = { terms: [] }; }\nconst src = $('Build Glossary Input').item.json;\nconst terms = r.terms || [];\nif (!terms.length) return [];\nreturn terms.map((t) => {\n  const sec = toSec(t.timestamp);\n  return { json: {\n    term: t.term,\n    definition: t.definition,\n    studyNote: t.study_note || null,\n    timestamp: t.timestamp || null,\n    deepLink: sec != null ? (src.videoUrl + '&t=' + sec + 's') : src.videoUrl,\n    sourceTitle: src.title,\n    videoUrl: src.videoUrl,\n  } };\n});"
+      },
+      "id": "58585858-5858-4858-8858-585858585810",
+      "name": "Format Glossary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Playlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Playlist": {
+      "main": [
+        [
+          {
+            "node": "Get Playlist Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Playlist Videos": {
+      "main": [
+        [
+          {
+            "node": "Extract Video List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Video List": {
+      "main": [
+        [
+          {
+            "node": "Keep First 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep First 5": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Glossary Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Glossary Input": {
+      "main": [
+        [
+          {
+            "node": "Has Transcript?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Transcript?": {
+      "main": [
+        [
+          {
+            "node": "Extract Terms (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Terms (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Glossary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

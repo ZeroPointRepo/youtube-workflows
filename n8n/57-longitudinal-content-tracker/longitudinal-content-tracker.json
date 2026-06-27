@@ -1,0 +1,339 @@
+{
+  "id": "TApiWf57Longitudinal01",
+  "name": "Longitudinal Content Tracker (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "57575757-5757-4757-8757-575757575701",
+      "name": "Weekly Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "57575757-5757-4757-8757-5757575757a1",
+              "name": "channel",
+              "value": "REPLACE_WITH_CHANNEL_HANDLE_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "57575757-5757-4757-8757-575757575702",
+      "name": "Set Channel",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/latest",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "57575757-5757-4757-8757-575757575703",
+      "name": "Get Latest (channel/latest)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -20,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Emit only NEW videos (dedupe by id across runs via workflow static data). First run seeds the baseline.\nconst data = $input.first().json;\nconst items = data.results || [];\nconst store = $getWorkflowStaticData('global');\nconst seen = store.seenVideoIds || [];\nconst seenSet = new Set(seen);\nconst fresh = [];\nfor (const v of items) {\n  if (!v.videoId || seenSet.has(v.videoId)) continue;\n  fresh.push({ json: { videoId: v.videoId, title: v.title || null, published: v.published || null, description: v.description || null, videoUrl: v.link || ('https://www.youtube.com/watch?v=' + v.videoId) } });\n  seenSet.add(v.videoId);\n}\nstore.seenVideoIds = Array.from(seenSet).slice(-500);\nreturn fresh;"
+      },
+      "id": "57575757-5757-4757-8757-575757575704",
+      "name": "Extract New Videos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 5
+      },
+      "id": "57575757-5757-4757-8757-575757575705",
+      "name": "Keep First 5",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "57575757-5757-4757-8757-575757575706",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function ts(sec) {\n  const s = Math.floor(sec || 0);\n  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;\n  const mm = (r < 10 ? '0' : '') + r;\n  return h > 0 ? (h + ':' + (m < 10 ? '0' : '') + m + ':' + mm) : (m + ':' + mm);\n}\nconst d = $json; const seg = Array.isArray(d.transcript) ? d.transcript : [];\nconst src = $('Extract New Videos').item.json;\nconst transcriptText = seg.map((s) => '[' + ts(s.start) + '] ' + s.text).join('\\n');\nreturn { json: { videoId: src.videoId, title: src.title, published: src.published, videoUrl: src.videoUrl, transcriptText, hasTranscript: transcriptText.length > 0 } };"
+      },
+      "id": "57575757-5757-4757-8757-575757575707",
+      "name": "Build Snapshot Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c5757575-5757-4757-8757-575757575ccc",
+              "leftValue": "={{ $json.hasTranscript }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "57575757-5757-4757-8757-575757575708",
+      "name": "Has Transcript?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Summarize this single new video for a longitudinal content tracker that watches how a channel messaging changes over time. Respond with a JSON object with keys: summary (2-3 sentences), themes (array of short theme tags), key_messages (array of strings). Use only the transcript; do not invent content.' }, { role: 'user', content: 'Title: ' + ($json.title || '') + '\\n\\nTranscript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "57575757-5757-4757-8757-575757575709",
+      "name": "Summarize (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = {}; }\nconst src = $('Build Snapshot Input').item.json;\nreturn { json: {\n  videoId: src.videoId,\n  title: src.title,\n  published: src.published,\n  videoUrl: src.videoUrl,\n  summary: r.summary || null,\n  themes: r.themes || [],\n  keyMessages: r.key_messages || [],\n  status: 'snapshot',\n} };"
+      },
+      "id": "57575757-5757-4757-8757-575757575710",
+      "name": "Format Snapshot Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Weekly Schedule": {
+      "main": [
+        [
+          {
+            "node": "Set Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Channel": {
+      "main": [
+        [
+          {
+            "node": "Get Latest (channel/latest)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest (channel/latest)": {
+      "main": [
+        [
+          {
+            "node": "Extract New Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract New Videos": {
+      "main": [
+        [
+          {
+            "node": "Keep First 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep First 5": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Snapshot Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Snapshot Input": {
+      "main": [
+        [
+          {
+            "node": "Has Transcript?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Transcript?": {
+      "main": [
+        [
+          {
+            "node": "Summarize (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Snapshot Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

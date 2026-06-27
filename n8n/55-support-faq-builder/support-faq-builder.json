@@ -1,0 +1,372 @@
+{
+  "id": "TApiWf55SupportFAQ01",
+  "name": "Support FAQ Builder from Tutorials (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "55555555-5555-4555-8555-555555555501",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "55555555-5555-4555-8555-5555555555a1",
+              "name": "channel",
+              "value": "REPLACE_WITH_TUTORIAL_CHANNEL_HANDLE_OR_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "55555555-5555-4555-8555-555555555502",
+      "name": "Set Channel",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/resolve",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "input",
+              "value": "={{ $json.channel }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "55555555-5555-4555-8555-555555555503",
+      "name": "Resolve Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -20,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/channel/videos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "55555555-5555-4555-8555-555555555504",
+      "name": "List Channel Videos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        200,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn (data.results || []).map((v) => ({ json: { videoId: v.videoId, videoTitle: v.title || null, videoUrl: 'https://www.youtube.com/watch?v=' + v.videoId } }));"
+      },
+      "id": "55555555-5555-4555-8555-555555555505",
+      "name": "Extract Video List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 5
+      },
+      "id": "55555555-5555-4555-8555-555555555506",
+      "name": "Keep First 5",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        640,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "55555555-5555-4555-8555-555555555507",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        860,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const d = $json; const seg = Array.isArray(d.transcript) ? d.transcript : []; const meta = d.metadata || {}; const vid = d.video_id;\nconst transcriptText = seg.map((s) => s.text).join(' ');\nreturn { json: { title: meta.title || vid, videoUrl: 'https://www.youtube.com/watch?v=' + vid, transcriptApiUrl: 'https://transcriptapi.com/api/v2/youtube/transcript?video_url=https://www.youtube.com/watch?v=' + vid, transcriptText, hasTranscript: transcriptText.length > 0 } };"
+      },
+      "id": "55555555-5555-4555-8555-555555555508",
+      "name": "Build FAQ Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c5555555-5555-4555-8555-555555555ccc",
+              "leftValue": "={{ $json.hasTranscript }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "55555555-5555-4555-8555-555555555509",
+      "name": "Has Transcript?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are drafting INTERNAL support FAQ entries from a tutorial/support video transcript. Respond with a JSON object with key faqs: an array of objects with question (a question a user would actually ask), answer (a concise answer grounded ONLY in what the video explains), category (a short topic label), confidence (high, medium, or low based on how clearly the video answers it). Draft 3-8 entries. Never invent product behavior the video does not show. These are DRAFTS for human review before publishing.' }, { role: 'user', content: 'Video: ' + ($json.title || '') + '\\n\\nTranscript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "55555555-5555-4555-8555-555555555510",
+      "name": "FAQ Extract (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = { faqs: [] }; }\nconst src = $('Build FAQ Input').item.json;\nconst faqs = r.faqs || [];\nif (!faqs.length) return [];\nreturn faqs.map((f) => ({ json: {\n  question: f.question,\n  answer: f.answer,\n  category: f.category || null,\n  confidence: f.confidence || null,\n  status: 'draft',\n  sourceTitle: src.title,\n  videoUrl: src.videoUrl,\n  transcriptApiUrl: src.transcriptApiUrl,\n} }));"
+      },
+      "id": "55555555-5555-4555-8555-555555555511",
+      "name": "Format FAQ Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Channel": {
+      "main": [
+        [
+          {
+            "node": "Resolve Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Channel": {
+      "main": [
+        [
+          {
+            "node": "List Channel Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Channel Videos": {
+      "main": [
+        [
+          {
+            "node": "Extract Video List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Video List": {
+      "main": [
+        [
+          {
+            "node": "Keep First 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep First 5": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build FAQ Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build FAQ Input": {
+      "main": [
+        [
+          {
+            "node": "Has Transcript?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Transcript?": {
+      "main": [
+        [
+          {
+            "node": "FAQ Extract (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAQ Extract (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format FAQ Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
