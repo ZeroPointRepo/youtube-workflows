@@ -60,6 +60,10 @@ Drop these into [n8n](https://n8n.io) (more platforms coming) and you've got a w
 | 44 | [Conference / Talk Archiver](n8n/44-conference-talk-archiver) | n8n | Archive a conference channel's talks into structured rows (title, speaker, company, summary, tags, links). For event/ops teams. |
 | 45 | [Customer Testimonial Mining](n8n/45-customer-testimonial-mining) | n8n | Mine positive customer quotes with timestamps, theme tags, confidence, and suggested marketing use. For marketers. |
 | 46 | [Meeting Prep Research Pack](n8n/46-meeting-prep-research-pack) | n8n | Research a company from its videos — narrative, announcements, pain points, objections, discovery questions. For sales/BD. |
+| 47 | [Lecture Chapter Summary with Timestamps](n8n/47-lecture-chapter-summary) | n8n | Turn a lecture into a timestamped chapter outline with summary bullets, key concepts, and study prompts. For edtech/students. |
+| 48 | [Analyst Presentation Archiver](n8n/48-analyst-presentation-archiver) | n8n | Archive a research/IR channel's presentations into rows (company, speaker, event, key statements, risks). For finance/research. |
+| 49 | [Discourse Analysis Pipeline](n8n/49-discourse-analysis-pipeline) | n8n | Neutral thematic analysis of how a topic is discussed — frames, stance clusters, evidence snippets, caveats. For researchers/analysts. |
+| 50 | [Transcript Availability Checker](n8n/50-transcript-availability-checker) | n8n | Check a list of videos for caption availability — status, error reason, retry recommendation. Credit-safe. For data/ops teams. |
 
 More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are on the way — [contributions welcome](CONTRIBUTING.md).
 

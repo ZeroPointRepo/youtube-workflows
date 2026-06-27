@@ -1,0 +1,193 @@
+{
+  "id": "TApiWf47Chapters01",
+  "name": "Lecture Chapter Summary with Timestamps (TranscriptAPI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "47474747-4747-4747-8747-474747474701",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "47474747-4747-4747-8747-4747474747a1",
+              "name": "videoUrl",
+              "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "47474747-4747-4747-8747-474747474702",
+      "name": "Set Video URL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://transcriptapi.com/api/v2/youtube/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "video_url",
+              "value": "={{ $json.videoUrl }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "send_metadata",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "47474747-4747-4747-8747-474747474703",
+      "name": "Get Transcript (TranscriptAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_TRANSCRIPTAPI_CRED_ID",
+          "name": "TranscriptAPI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function ts(sec) {\n  const s = Math.floor(sec || 0);\n  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;\n  const mm = (r < 10 ? '0' : '') + r;\n  return h > 0 ? (h + ':' + (m < 10 ? '0' : '') + m + ':' + mm) : (m + ':' + mm);\n}\nconst data = $input.first().json; const seg = Array.isArray(data.transcript) ? data.transcript : []; const meta = data.metadata || {};\nconst transcriptText = seg.map((s) => '[' + ts(s.start) + '] ' + s.text).join('\\n');\nreturn [ { json: { title: meta.title || null, videoUrl: 'https://www.youtube.com/watch?v=' + data.video_id, transcriptText } } ];"
+      },
+      "id": "47474747-4747-4747-8747-474747474704",
+      "name": "Build Timestamped Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are a study assistant. From this timestamped lecture transcript, produce a chapter outline. Respond with a JSON object with keys: chapters (array of objects with timestamp (the [m:ss]/[h:mm:ss] marker where the chapter starts), title, bullets (array of 2-4 summary bullets)), key_concepts (array of 5-8 strings), study_prompts (array of 4-6 review questions), markdown (the full outline in Markdown). Use only what is in the transcript.' }, { role: 'user', content: 'Lecture: ' + ($json.title || 'Untitled') + '\\n\\nTimestamped transcript:\\n' + $json.transcriptText } ] }) }}",
+        "options": {}
+      },
+      "id": "47474747-4747-4747-8747-474747474705",
+      "name": "Chapter Summary (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENAI_CRED_ID",
+          "name": "OpenAI - Authorization Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($json.choices && $json.choices[0] && $json.choices[0].message.content) || '';\nlet r; try { r = JSON.parse(raw); } catch (e) { r = { markdown: raw }; }\nconst src = $('Build Timestamped Text').first().json;\nreturn [ { json: { title: src.title, videoUrl: src.videoUrl, chapters: r.chapters || [], keyConcepts: r.key_concepts || [], studyPrompts: r.study_prompts || [], markdown: r.markdown || '' } } ];"
+      },
+      "id": "47474747-4747-4747-8747-474747474706",
+      "name": "Format Chapters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Video URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Video URL": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (TranscriptAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (TranscriptAPI)": {
+      "main": [
+        [
+          {
+            "node": "Build Timestamped Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Timestamped Text": {
+      "main": [
+        [
+          {
+            "node": "Chapter Summary (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chapter Summary (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Chapters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
