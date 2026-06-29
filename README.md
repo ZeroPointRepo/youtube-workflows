@@ -77,7 +77,7 @@ More workflows (Make.com blueprints, Zapier zaps, and many more n8n recipes) are
 
 ### 🤖 Also available as AI Agent Skills
 
-Every workflow above also ships as an **[AI agent skill](agent-skills/)** — a markdown skill file for Claude, Codex, OpenClaw, Hermes, and any agent that reads skill files. Same task, but your agent does the reasoning itself, so all you need is a TranscriptAPI key (**no separate AI/LLM key**). Browse all 34 in **[`agent-skills/`](agent-skills/)**.
+Every workflow above also ships as an **[AI agent skill](agent-skills/)** — a markdown skill file for Claude, Codex, OpenClaw, Hermes, and any agent that reads skill files. Same task, but your agent does the reasoning itself, so all you need is a TranscriptAPI key (**no separate AI/LLM key**). Browse all 58 in **[`agent-skills/`](agent-skills/)**.
 
 ---
 
